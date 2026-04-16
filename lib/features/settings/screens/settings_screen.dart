@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/database/backup_service.dart';
 import '../../../core/theme/theme_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -73,20 +74,32 @@ class SettingsScreen extends ConsumerWidget {
                     icon: PhosphorIconsDuotone.downloadSimple,
                     title: 'Backup Data',
                     subtitle: 'Export all data as JSON',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Coming in Phase 5')),
-                      );
+                    onTap: () async {
+                      final success = await BackupService.createBackup();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'Backup generated successfully' : 'Backup failed'),
+                            backgroundColor: success ? Colors.green.shade600 : colorScheme.error,
+                          ),
+                        );
+                      }
                     },
                   ),
                   _SettingsTile(
                     icon: PhosphorIconsDuotone.uploadSimple,
                     title: 'Restore Data',
                     subtitle: 'Import from JSON backup',
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Coming in Phase 5')),
-                      );
+                    onTap: () async {
+                      final success = await BackupService.restoreBackup();
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(success ? 'Data restored successfully' : 'Restore failed or cancelled'),
+                            backgroundColor: success ? Colors.green.shade600 : colorScheme.error,
+                          ),
+                        );
+                      }
                     },
                   ),
 

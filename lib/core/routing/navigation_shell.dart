@@ -25,15 +25,7 @@ class NavigationShell extends StatelessWidget {
     return Scaffold(
       body: child,
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Will navigate to AddTransactionScreen in Phase 3
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Add transaction — coming in Phase 3'),
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        },
+        onPressed: () => context.push(AppRoutes.addTransaction),
         tooltip: 'Add Transaction',
         child: const Icon(Icons.add_rounded, size: 28),
       ),

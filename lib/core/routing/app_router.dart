@@ -7,6 +7,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../features/dashboard/screens/dashboard_screen.dart';
 import '../../features/transactions/screens/history_screen.dart';
+import '../../features/transactions/screens/add_transaction_screen.dart';
 import '../../features/insights/screens/insights_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import 'navigation_shell.dart';
@@ -99,9 +100,9 @@ final GoRouter appRouter = GoRouter(
     ),
 
     // --- Full-screen routes (pushed on top of shell) ---
-    // GoRoute(
-    //   path: AppRoutes.addTransaction,
-    //   builder: (context, state) => const AddTransactionScreen(),
-    // ),
+    GoRoute(
+      path: AppRoutes.addTransaction,
+      builder: (context, state) => const AddTransactionScreen(),
+    ),
   ],
 );

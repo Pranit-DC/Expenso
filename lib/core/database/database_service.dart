@@ -21,6 +21,7 @@ class DatabaseService {
     await Hive.openBox<TransactionModel>(AppConstants.transactionsBox);
     await Hive.openBox<CategoryModel>(AppConstants.categoriesBox);
     await Hive.openBox<BudgetModel>(AppConstants.budgetBox);
+    await Hive.openBox('settings');
   }
 
   static Box<TransactionModel> get transactionsBox =>

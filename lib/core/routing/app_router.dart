@@ -45,21 +45,21 @@ const List<NavDestination> destinations = [
     path: AppRoutes.dashboard,
   ),
   NavDestination(
-    label: 'History',
-    icon: PhosphorIconsRegular.clockCounterClockwise,
-    selectedIcon: PhosphorIconsFill.clockCounterClockwise,
+    label: 'Transactions',
+    icon: PhosphorIconsRegular.wallet,
+    selectedIcon: PhosphorIconsFill.wallet,
     path: AppRoutes.history,
   ),
   NavDestination(
-    label: 'Insights',
+    label: 'Summary',
     icon: PhosphorIconsRegular.chartPieSlice,
     selectedIcon: PhosphorIconsFill.chartPieSlice,
     path: AppRoutes.insights,
   ),
   NavDestination(
-    label: 'Settings',
-    icon: PhosphorIconsRegular.gearSix,
-    selectedIcon: PhosphorIconsFill.gearSix,
+    label: 'More',
+    icon: PhosphorIconsRegular.list,
+    selectedIcon: PhosphorIconsFill.list,
     path: AppRoutes.settings,
   ),
 ];

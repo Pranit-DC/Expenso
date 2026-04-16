@@ -237,11 +237,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                       animation: _pieAnimation,
                       builder: (_, __) => Center(
                         child: SizedBox(
-                          height: 240,
+                          height: 180,
                           child: PieChart(
                             PieChartData(
                               sectionsSpace: 2,
-                              centerSpaceRadius: 60,
+                              centerSpaceRadius: 50,
                               pieTouchData: PieTouchData(
                                 touchCallback: (event, response) {
                                   setState(() {
@@ -268,7 +268,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                                 return PieChartSectionData(
                                   value: slice.amount * _pieAnimation.value,
                                   color: color,
-                                  radius: isTouched ? 52 : 42,
+                                  radius: isTouched ? 45 : 35,
                                   title: pct >= 6
                                       ? '${pct.toStringAsFixed(0)}%'
                                       : '',
@@ -325,7 +325,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                           color: color,
                           catIcon: cat != null
                               ? IconData(cat.iconCodePoint,
-                                  fontFamily: 'Phosphor-Fill',
+                                  fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
                                   fontPackage: 'phosphor_flutter')
                               : PhosphorIconsFill.question,
                           colorScheme: colorScheme,
@@ -491,8 +491,7 @@ class _CategoryProgressRow extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.transparent,
       ),
       child: Column(
         children: [
@@ -547,7 +546,7 @@ class _CategoryProgressRow extends StatelessWidget {
               curve: Curves.easeOutCubic,
               builder: (_, value, __) => LinearProgressIndicator(
                 value: value,
-                minHeight: 7,
+                minHeight: 5,
                 backgroundColor: colorScheme.surfaceContainerHighest,
                 valueColor: AlwaysStoppedAnimation<Color>(color),
               ),

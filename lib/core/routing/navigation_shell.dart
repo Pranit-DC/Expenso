@@ -1,7 +1,6 @@
 // core/routing/navigation_shell.dart
 // The persistent bottom navigation bar shell — Cashew-style.
 
-import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -32,23 +31,7 @@ class _NavigationShellState extends State<NavigationShell> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: PageTransitionSwitcher(
-        duration: const Duration(milliseconds: 300),
-        reverse: currentIndex < _previousIndex,
-        transitionBuilder: (child, animation, secondaryAnimation) {
-          return SharedAxisTransition(
-            animation: animation,
-            secondaryAnimation: secondaryAnimation,
-            transitionType: SharedAxisTransitionType.horizontal,
-            fillColor: Colors.transparent,
-            child: child,
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey(currentIndex),
-          child: widget.child,
-        ),
-      ),
+      body: widget.child,
       // ── Extended FAB (Cashew-style add button) ──
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add_transaction_fab',
@@ -70,15 +53,35 @@ class _NavigationShellState extends State<NavigationShell> {
         decoration: BoxDecoration(
           boxShadow: [
             BoxShadow(
-              color: isDark
-                  ? Colors.black.withValues(alpha: 0.4)
-                  : Colors.black.withValues(alpha: 0.1),
-              blurRadius: 12,
-              offset: const Offset(0, -3),
+              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+              spreadRadius: 0,
             ),
           ],
         ),
-        child: NavigationBar(
+        child: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            surfaceTintColor: Colors.transparent,
+            indicatorColor: Theme.of(context).colorScheme.primaryContainer,
+            labelTextStyle: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.selected)) {
+                return const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                  overflow: TextOverflow.clip,
+                );
+              } else {
+                return const TextStyle(
+                  fontSize: 13,
+                  overflow: TextOverflow.clip,
+                );
+              }
+            }),
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+          ),
+          child: NavigationBar(
           animationDuration: const Duration(milliseconds: 700),
           selectedIndex: currentIndex,
           onDestinationSelected: (index) {
@@ -89,14 +92,15 @@ class _NavigationShellState extends State<NavigationShell> {
           destinations: destinations
               .map(
                 (d) => NavigationDestination(
-                  icon: Icon(d.icon),
-                  selectedIcon: Icon(d.selectedIcon),
+                  icon: Icon(d.icon, size: 25),
+                  selectedIcon: Icon(d.selectedIcon, size: 25),
                   label: d.label,
                   tooltip: '',
                 ),
               )
               .toList(),
         ),
+       ),
       ),
     );
   }

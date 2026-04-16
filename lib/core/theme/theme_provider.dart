@@ -31,14 +31,10 @@ class ThemeState {
 
 /// Manages theme state and persists to Hive.
 class ThemeNotifier extends StateNotifier<ThemeState> {
+  late final Box _box;
+
   ThemeNotifier() : super(const ThemeState()) {
-    _load();
-  }
-
-  late Box _box;
-
-  Future<void> _load() async {
-    _box = await Hive.openBox(_kThemeBox);
+    _box = Hive.box(_kThemeBox);
 
     final presetIndex = _box.get(_kPresetKey, defaultValue: 0) as int;
     final brightnessStr =

@@ -15,6 +15,7 @@ import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/widgets/tappable.dart';
 
 // ── Sliding filter enum ──
 enum _SpendingFilter { all, expense, income }
@@ -233,13 +234,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               letterSpacing: 0.5,
                             ),
                           ),
-                          Text(
-                            '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayTotal)}',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
                               color: isPositiveDay
-                                  ? const Color(0xFF59A849)
-                                  : const Color(0xFFCA5A5A),
+                                  ? const Color(0xFF59A849).withValues(alpha: 0.15)
+                                  : const Color(0xFFCA5A5A).withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayTotal)}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: isPositiveDay
+                                    ? const Color(0xFF59A849)
+                                    : const Color(0xFFCA5A5A),
+                              ),
                             ),
                           ),
                         ],
@@ -332,7 +342,7 @@ class _GreetingAppBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: 110,
       floating: true,
       snap: true,
       pinned: false,
@@ -340,19 +350,20 @@ class _GreetingAppBar extends StatelessWidget {
       surfaceTintColor: Colors.transparent,
       flexibleSpace: FlexibleSpaceBar(
         collapseMode: CollapseMode.parallax,
-        titlePadding: const EdgeInsetsDirectional.only(start: 18, bottom: 14),
+        titlePadding: const EdgeInsetsDirectional.only(start: 18, bottom: 8),
         title: Text(
           month,
           style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: colorScheme.onSurfaceVariant.withValues(alpha: 0.8),
           ),
         ),
         background: Padding(
           padding: EdgeInsets.only(
             left: 18,
             right: 18,
-            top: MediaQuery.of(context).padding.top + 12,
+            top: MediaQuery.of(context).padding.top + 8,
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -410,8 +421,9 @@ class _SlidingFilterSelector extends StatelessWidget {
   Widget _filterChip(String label, _SpendingFilter filter) {
     final isSelected = selected == filter;
     return Expanded(
-      child: GestureDetector(
+      child: Tappable(
         onTap: () => onChanged(filter),
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
@@ -589,8 +601,9 @@ class _BudgetCard extends StatelessWidget {
     final isOver = spent > limit && limit > 0;
 
     if (limit <= 0) {
-      return GestureDetector(
+      return Tappable(
         onTap: onSetBudget,
+        borderRadius: BorderRadius.circular(20),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.all(18),
@@ -626,8 +639,9 @@ class _BudgetCard extends StatelessWidget {
       );
     }
 
-    return GestureDetector(
+    return Tappable(
       onTap: onSetBudget,
+      borderRadius: BorderRadius.circular(20),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
@@ -884,7 +898,7 @@ class _RecentTransactionTile extends StatelessWidget {
               child: Icon(
                 category != null
                     ? IconData(category!.iconCodePoint,
-                        fontFamily: 'Phosphor-Fill',
+                        fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
                         fontPackage: 'phosphor_flutter')
                     : PhosphorIconsFill.question,
                 size: 20,

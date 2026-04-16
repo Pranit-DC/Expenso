@@ -15,6 +15,7 @@ import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/routing/app_router.dart';
+import '../../../core/widgets/tappable.dart';
 
 enum _HistoryFilter { all, expense, income }
 
@@ -136,14 +137,14 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 10,
-                          vertical: 3,
+                          vertical: 4,
                         ),
                         decoration: BoxDecoration(
                           color: (isPositiveDay
                                   ? const Color(0xFF59A849)
                                   : const Color(0xFFCA5A5A))
-                              .withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
+                              .withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
                           '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayNet)}',
@@ -245,14 +246,29 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
 
   Widget _chip(String label, _HistoryFilter f) {
     final isSelected = filter == f;
+    Color selectedBgColor;
+    Color textColor;
+
+    if (f == _HistoryFilter.expense) {
+      selectedBgColor = const Color(0xFFCA5A5A).withValues(alpha: 0.15);
+      textColor = const Color(0xFFCA5A5A);
+    } else if (f == _HistoryFilter.income) {
+      selectedBgColor = const Color(0xFF59A849).withValues(alpha: 0.15);
+      textColor = const Color(0xFF59A849);
+    } else {
+      selectedBgColor = colorScheme.primaryContainer;
+      textColor = colorScheme.onPrimaryContainer;
+    }
+
     return Expanded(
-      child: GestureDetector(
+      child: Tappable(
         onTap: () => onChanged(f),
+        borderRadius: BorderRadius.circular(9),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOutCubic,
           decoration: BoxDecoration(
-            color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+            color: isSelected ? selectedBgColor : Colors.transparent,
             borderRadius: BorderRadius.circular(9),
           ),
           child: Center(
@@ -261,9 +277,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                color: isSelected
-                    ? colorScheme.onPrimaryContainer
-                    : colorScheme.onSurfaceVariant,
+                color: isSelected ? textColor : colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -341,9 +355,12 @@ class _HistoryTile extends StatelessWidget {
           ),
         ],
       ),
-      child: Container(
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
+      child: Tappable(
+        onTap: onEdit,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
         ),
@@ -368,7 +385,7 @@ class _HistoryTile extends StatelessWidget {
                 category != null
                     ? IconData(
                         category!.iconCodePoint,
-                        fontFamily: 'Phosphor-Fill',
+                        fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
                         fontPackage: 'phosphor_flutter',
                       )
                     : PhosphorIconsFill.question,
@@ -422,8 +439,9 @@ class _HistoryTile extends StatelessWidget {
           ],
         ),
       ),
-    )
-        .animate(delay: (index * 30).ms)
+    ),
+  )
+      .animate(delay: (index * 30).ms)
         .fadeIn(duration: 300.ms)
         .slideX(begin: 0.03, end: 0);
   }

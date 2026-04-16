@@ -1,6 +1,4 @@
 // features/transactions/screens/add_transaction_screen.dart
-// Cashew-inspired: color-coded header, animated type toggle, sticky save button.
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -14,49 +12,37 @@ import '../../../core/database/models/category_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/constants.dart';
-
-// Cashew accent colors for expense / income
-const _expenseColor = Color(0xFFCA5A5A);
-const _incomeColor = Color(0xFF59A849);
+import '../../../core/widgets/tappable.dart';
+import '../../../core/widgets/bottom_sheet_helper.dart';
+import 'widgets/number_pad.dart';
 
 class AddTransactionScreen extends ConsumerStatefulWidget {
   final TransactionModel? existingTransaction;
   const AddTransactionScreen({super.key, this.existingTransaction});
 
   @override
-  ConsumerState<AddTransactionScreen> createState() =>
-      _AddTransactionScreenState();
+  ConsumerState<AddTransactionScreen> createState() => _AddTransactionScreenState();
 }
 
-class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
-    with SingleTickerProviderStateMixin {
+class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
   late TransactionType _type;
-  final _amountController = TextEditingController();
+  String _amountStr = '';
   final _noteController = TextEditingController();
   late DateTime _selectedDate;
   String? _selectedCategoryId;
 
-  late AnimationController _headerAnimController;
-  late Animation<Color?> _headerColorAnim;
-
   bool get _isEditing => widget.existingTransaction != null;
-
-  Color get _activeColor =>
-      _type == TransactionType.expense ? _expenseColor : _incomeColor;
 
   @override
   void initState() {
     super.initState();
-
-    _headerAnimController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 380),
-    );
-
     if (_isEditing) {
       final t = widget.existingTransaction!;
       _type = t.type;
-      _amountController.text = t.amount.toStringAsFixed(2);
+      _amountStr = t.amount.toStringAsFixed(2);
+      if (_amountStr.endsWith('.00')) {
+        _amountStr = _amountStr.substring(0, _amountStr.length - 3);
+      }
       _noteController.text = t.note ?? '';
       _selectedDate = t.date;
       _selectedCategoryId = t.categoryId;
@@ -64,25 +50,11 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
       _type = TransactionType.expense;
       _selectedDate = DateTime.now();
     }
-
-    _headerColorAnim = ColorTween(
-      begin: _expenseColor,
-      end: _incomeColor,
-    ).animate(CurvedAnimation(
-      parent: _headerAnimController,
-      curve: Curves.easeInOutCubic,
-    ));
-
-    if (_type == TransactionType.income) {
-      _headerAnimController.value = 1.0;
-    }
   }
 
   @override
   void dispose() {
-    _amountController.dispose();
     _noteController.dispose();
-    _headerAnimController.dispose();
     super.dispose();
   }
 
@@ -91,13 +63,225 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
     HapticFeedback.selectionClick();
     setState(() {
       _type = t;
-      _selectedCategoryId = null;
+      _selectedCategoryId = null; 
     });
-    if (t == TransactionType.income) {
-      _headerAnimController.forward();
-    } else {
-      _headerAnimController.reverse();
-    }
+  }
+
+  void _showNumberPad(Color activeColor) {
+    BottomSheetHelper.openBottomSheet(
+      context: context,
+      child: NumberPad(
+        activeColor: activeColor,
+        onKeyPressed: (key) {
+          HapticFeedback.lightImpact();
+          setState(() {
+            if (key == '.' && _amountStr.contains('.')) return;
+            if (_amountStr == '0' && key != '.') {
+              _amountStr = key;
+            } else {
+              _amountStr += key;
+            }
+          });
+        },
+        onBackspace: () {
+          HapticFeedback.lightImpact();
+          setState(() {
+            if (_amountStr.isNotEmpty) {
+              _amountStr = _amountStr.substring(0, _amountStr.length - 1);
+            }
+          });
+        },
+        onDone: () => Navigator.pop(context),
+      ),
+    );
+  }
+
+  void _showCategoryPickerBottomSheet(List<CategoryModel> categories) {
+    BottomSheetHelper.openBottomSheet(
+      context: context,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Cashew Category grid mock (SS 5)
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Tappable(
+                      onTap: () {},
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(PhosphorIconsFill.caretDown, size: 14, color: Color(0xFFCA5A5A)),
+                            const SizedBox(width: 6),
+                            const Text('Expense', style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Tappable(
+                      onTap: () {},
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        alignment: Alignment.center,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(PhosphorIconsFill.caretUp, size: 14, color: Color(0xFF59A849)),
+                            const SizedBox(width: 6),
+                            const Text('Income', style: TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 10,
+                childAspectRatio: 0.8,
+              ),
+              itemCount: categories.length + 1,
+              itemBuilder: (ctx, idx) {
+                if (idx == categories.length) {
+                  return Column(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(Icons.add, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  );
+                }
+                final cat = categories[idx];
+                final catColor = Color(int.parse('FF${cat.colorHex}', radix: 16));
+                return Tappable(
+                  onTap: () {
+                    setState(() => _selectedCategoryId = cat.id);
+                    Navigator.pop(context);
+                  },
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 60,
+                        height: 60,
+                        decoration: BoxDecoration(
+                          color: catColor,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Icon(
+                          IconData(cat.iconCodePoint, fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter'),
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        cat.name,
+                        style: const TextStyle(fontSize: 11),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showTypeSelectorSheet() {
+    // Replica of SS 1
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surfaceContainerLow,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Select Transaction Type',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              _TypeCard(
+                icon: PhosphorIconsFill.checkCircle,
+                title: 'Default',
+                bullets: const [],
+                isSelected: true,
+              ),
+              _TypeCard(
+                icon: PhosphorIconsRegular.calendarBlank,
+                title: 'Upcoming',
+                bullets: const [
+                  'A transaction that is unpaid',
+                  'Does not count towards your total unless marked \'Paid\' or \'Deposited\'',
+                ],
+              ),
+              _TypeCard(
+                icon: PhosphorIconsRegular.calendarPlus,
+                title: 'Subscription',
+                bullets: const [
+                  'Recurring transaction that will be shown on the subscriptions page',
+                  'Does not count towards your total unless marked \'Paid\' or \'Deposited\'',
+                  'Next transaction generated when current marked \'Paid\' or \'Deposited\'',
+                ],
+              ),
+              _TypeCard(
+                icon: PhosphorIconsRegular.arrowsLeftRight,
+                title: 'Repetitive',
+                bullets: const [
+                  'Recurring transaction',
+                  'Does not count towards your total unless marked \'Paid\' or \'Deposited\'',
+                  'Next transaction generated when current marked \'Paid\' or \'Deposited\'',
+                ],
+              ),
+            ],
+          ),
+        );
+      }
+    );
+  }
+
+  Color _getBaseColor(TransactionType t) {
+    if (t == TransactionType.expense) return const Color(0xFFA5601F); // Cashew orange/brown from SS
+    return const Color(0xFF59A849);
   }
 
   @override
@@ -106,177 +290,234 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
     final colorScheme = theme.colorScheme;
     final categories = ref.watch(categoryProvider);
 
-    final filteredCategories = categories
-        .where((c) =>
-            c.type ==
-                (_type == TransactionType.expense ? 0 : 1) ||
-            c.type == 2)
-        .toList();
+    final filteredCategories = categories.where((c) =>
+        c.type == (_type == TransactionType.expense ? 0 : 1) || c.type == 2).toList();
+    final selectedCategory = filteredCategories.where((c) => c.id == _selectedCategoryId).firstOrNull;
+
+    final headerColor = selectedCategory != null
+        ? Color(int.parse('FF${selectedCategory.colorHex}', radix: 16))
+        : _getBaseColor(_type);
 
     return Scaffold(
-      // ── Sticky bottom save button (Cashew SaveBottomButton) ──
-      bottomNavigationBar: _SaveBottomButton(
-        isEditing: _isEditing,
-        color: _activeColor,
-        onSave: _saveTransaction,
+      backgroundColor: colorScheme.surface,
+      appBar: AppBar(
+        title: const Text('Add Transaction', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+        centerTitle: false,
+        backgroundColor: colorScheme.surface,
+        surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert_rounded)),
+        ],
       ),
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── Cashew-style color-coded header ──
-          AnimatedBuilder(
-            animation: _headerColorAnim,
-            builder: (_, __) {
-              final headerColor =
-                  _headerColorAnim.value ?? _expenseColor;
-              return SliverAppBar(
-                expandedHeight: 140,
-                pinned: true,
-                backgroundColor: headerColor,
-                foregroundColor: Colors.white,
-                surfaceTintColor: Colors.transparent,
-                iconTheme: const IconThemeData(color: Colors.white),
-                actionsIconTheme: const IconThemeData(color: Colors.white),
-                leading: IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                actions: [
-                  if (_isEditing)
-                    IconButton(
-                      icon: const Icon(PhosphorIconsBold.trash,
-                          color: Colors.white),
-                      onPressed: _deleteTransaction,
-                    ),
-                ],
-                flexibleSpace: FlexibleSpaceBar(
-                  collapseMode: CollapseMode.parallax,
-                  background: Container(
-                    color: headerColor,
-                    child: SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const SizedBox(height: 44),
-                            // ── Type toggle inside header ──
-                            _TypeToggle(
-                              type: _type,
-                              onChanged: _setType,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              );
-            },
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: FilledButton(
+             onPressed: _saveTransaction,
+             style: FilledButton.styleFrom(
+               backgroundColor: const Color(0xFF88A2D8), // Light purple from SS
+               foregroundColor: Colors.black87,
+               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+               minimumSize: const Size(double.infinity, 56),
+             ),
+             child: const Text('Enter Amount', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
           ),
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(18, 20, 18, 0),
+        ),
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Head Section (SS 2 & SS 3 segment control)
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              color: headerColor,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Large amount display (Cashew calculator style) ──
-                  AnimatedBuilder(
-                    animation: _headerColorAnim,
-                    builder: (_, __) {
-                      final activeColor =
-                          _headerColorAnim.value ?? _expenseColor;
-                      return _AmountDisplay(
-                        controller: _amountController,
-                        activeColor: activeColor,
-                        theme: theme,
-                        colorScheme: colorScheme,
-                      );
-                    },
-                  ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.05, end: 0),
-                  const SizedBox(height: 24),
-
-                  // ── Category label ──
-                  Text(
-                    'Category',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: colorScheme.onSurfaceVariant,
+                  // Segmented Bar area (darker background of headerColor)
+                  Container(
+                    color: Colors.black.withValues(alpha: 0.2), 
+                    child: Row(
+                      children: [
+                        _SegTab('Expense', PhosphorIconsFill.caretDown, _type == TransactionType.expense, () => _setType(TransactionType.expense)),
+                        _SegTab('Income', PhosphorIconsFill.caretUp, _type == TransactionType.income, () => _setType(TransactionType.income)),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 12),
-
-                  // ── Category grid ──
-                  _CategoryGrid(
-                    categories: filteredCategories,
-                    selectedId: _selectedCategoryId,
-                    activeColor: _activeColor,
-                    colorScheme: colorScheme,
-                    onSelected: (id) =>
-                        setState(() => _selectedCategoryId = id),
-                  ).animate().fadeIn(delay: 60.ms, duration: 300.ms),
-                  const SizedBox(height: 24),
-
-                  // ── Date selector ──
-                  _DateSelector(
-                    date: _selectedDate,
-                    activeColor: _activeColor,
-                    colorScheme: colorScheme,
-                    theme: theme,
-                    onTap: _pickDate,
-                  ).animate().fadeIn(delay: 90.ms, duration: 300.ms),
-                  const SizedBox(height: 12),
-
-                  // ── Note field ──
-                  TextField(
-                    controller: _noteController,
-                    textCapitalization: TextCapitalization.sentences,
-                    decoration: InputDecoration(
-                      hintText: 'Add a note (optional)',
-                      filled: true,
-                      fillColor: colorScheme.surfaceContainerLow,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        borderSide: BorderSide.none,
+                  // Emoji + Amount Header
+                  Tappable(
+                    onTap: () => _showNumberPad(headerColor),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                      child: Row(
+                        children: [
+                          Tappable(
+                            onTap: () => _showCategoryPickerBottomSheet(filteredCategories),
+                            child: selectedCategory != null 
+                              ? Icon(
+                                  IconData(selectedCategory.iconCodePoint, fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter'),
+                                  size: 60, color: Colors.white)
+                              : const Text('❓', style: TextStyle(fontSize: 60)),
+                          ),
+                          const Spacer(),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '${AppConstants.currencySymbol}${_amountStr.isEmpty ? "0" : _amountStr}',
+                                style: const TextStyle(fontSize: 38, fontWeight: FontWeight.bold, color: Colors.white),
+                              ),
+                              Tappable(
+                                onTap: () => _showCategoryPickerBottomSheet(filteredCategories),
+                                child: Text(
+                                  selectedCategory?.name ?? 'Select Category',
+                                  style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w500),
+                                ),
+                              ),
+                            ],
+                          )
+                        ],
                       ),
-                      prefixIcon: Icon(PhosphorIconsRegular.notepad,
-                          color: colorScheme.onSurfaceVariant),
                     ),
-                    maxLines: 1,
-                  ).animate().fadeIn(delay: 120.ms, duration: 300.ms),
-
-                  const SizedBox(height: 100),
+                  ),
                 ],
               ),
             ),
-          ),
-        ],
+
+            // Below Header Body (Chips and inputs)
+            Padding(
+               padding: const EdgeInsets.symmetric(vertical: 24),
+               child: Column(
+                 crossAxisAlignment: CrossAxisAlignment.start,
+                 children: [
+                    // DATE
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                         children: [
+                           Container(
+                             padding: const EdgeInsets.all(12),
+                             decoration: BoxDecoration(color: colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(14)),
+                             child: const Icon(PhosphorIconsRegular.calendarBlank, size: 24),
+                           ),
+                           const SizedBox(width: 12),
+                           const Text('Today', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                           const Spacer(),
+                           Container(
+                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                             decoration: BoxDecoration(color: colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+                             child: const Text('1 : 24', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                           )
+                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // TYPES Row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                           Tappable(
+                             onTap: _showTypeSelectorSheet,
+                             borderRadius: BorderRadius.circular(12),
+                             child: Container(
+                               padding: const EdgeInsets.all(10),
+                               decoration: BoxDecoration(
+                                 border: Border.all(color: colorScheme.outlineVariant),
+                                 borderRadius: BorderRadius.circular(12),
+                               ),
+                               child: const Icon(PhosphorIconsRegular.info, size: 20),
+                             ),
+                           ),
+                           const SizedBox(width: 8),
+                           _Chip(label: 'Default', isSelected: true, onTap: _showTypeSelectorSheet),
+                           _Chip(label: 'Upcoming'),
+                           _Chip(label: 'Subscription'),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    // Wallets Row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                           _Chip(label: 'UPI', isSelected: false, isMint: true),
+                           _Chip(label: 'Cash'),
+                           _Chip(label: 'Stash'),
+                           _Chip(label: '+', isIcon: true),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    // Budgets Row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                           _Chip(label: 'No budget', isSelected: true),
+                           _Chip(label: 'Budget'),
+                           _Chip(label: '+', isIcon: true),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+                    // Goals Row
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        children: [
+                           _Chip(label: 'No goal', isSelected: true),
+                           _Chip(label: 'Oneplus Nord 4 accessories'),
+                           _Chip(label: '+', isIcon: true),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+                    // Title
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: TextField(
+                        controller: _noteController,
+                        decoration: InputDecoration(
+                          hintText: 'Title',
+                          filled: true,
+                          fillColor: colorScheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                          suffixIcon: const Padding(
+                             padding: EdgeInsets.all(12.0),
+                             child: Text('T', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.grey)),
+                          ),
+                        ),
+                      ),
+                    )
+                 ],
+               ),
+            )
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _pickDate() async {
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
-    );
-    if (picked != null) setState(() => _selectedDate = picked);
-  }
-
   void _saveTransaction() {
-    final amountText = _amountController.text.trim();
+    final amountText = _amountStr.trim();
     final amount = double.tryParse(amountText);
 
     if (amount == null || amount <= 0) {
-      _showError('Please enter a valid amount');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter amount!')));
       return;
     }
     if (_selectedCategoryId == null) {
-      _showError('Please select a category');
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Select a category!')));
       return;
     }
 
@@ -287,9 +528,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
       type: _type,
       categoryId: _selectedCategoryId!,
       date: _selectedDate,
-      note: _noteController.text.trim().isEmpty
-          ? null
-          : _noteController.text.trim(),
+      note: _noteController.text.trim().isEmpty ? null : _noteController.text.trim(),
     );
 
     if (_isEditing) {
@@ -297,112 +536,31 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen>
     } else {
       ref.read(transactionProvider.notifier).add(transaction);
     }
-
     Navigator.of(context).pop();
-  }
-
-  void _deleteTransaction() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Transaction'),
-        content: const Text(
-            'Are you sure you want to delete this transaction?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              ref
-                  .read(transactionProvider.notifier)
-                  .delete(widget.existingTransaction!.id);
-              Navigator.pop(ctx);
-              Navigator.pop(context);
-            },
-            style: FilledButton.styleFrom(backgroundColor: _expenseColor),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: _expenseColor,
-        shape:
-            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        margin: const EdgeInsets.fromLTRB(18, 0, 18, 20),
-      ),
-    );
   }
 }
 
-// ── Cashew-style income/expense toggle inside header ──
-class _TypeToggle extends StatelessWidget {
-  final TransactionType type;
-  final ValueChanged<TransactionType> onChanged;
-
-  const _TypeToggle({required this.type, required this.onChanged});
+class _SegTab extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+  const _SegTab(this.title, this.icon, this.isSelected, this.onTap);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      padding: const EdgeInsets.all(3),
-      child: Row(
-        children: [
-          _tab('Expense', TransactionType.expense,
-              PhosphorIconsFill.arrowUp),
-          _tab('Income', TransactionType.income,
-              PhosphorIconsFill.arrowDown),
-        ],
-      ),
-    );
-  }
-
-  Widget _tab(String label, TransactionType t, IconData icon) {
-    final isSelected = type == t;
     return Expanded(
       child: GestureDetector(
-        onTap: () => onChanged(t),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: isSelected
-                ? Colors.white.withValues(alpha: 0.22)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(11),
-          ),
+        onTap: onTap,
+        child: Container(
+          color: isSelected ? Colors.black.withValues(alpha: 0.15) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 14),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
-                  size: 15,
-                  color: Colors.white
-                      .withValues(alpha: isSelected ? 1 : 0.6)),
+              Icon(icon, size: 14, color: isSelected ? Colors.white : Colors.white70),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontWeight: isSelected
-                      ? FontWeight.w700
-                      : FontWeight.w500,
-                  color: Colors.white
-                      .withValues(alpha: isSelected ? 1 : 0.6),
-                  fontSize: 14,
-                ),
-              ),
+              Text(title, style: TextStyle(color: isSelected ? Colors.white : Colors.white70, fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal)),
             ],
           ),
         ),
@@ -411,271 +569,77 @@ class _TypeToggle extends StatelessWidget {
   }
 }
 
-// ── Large amount display (Cashew calculator feel) ──
-class _AmountDisplay extends StatelessWidget {
-  final TextEditingController controller;
-  final Color activeColor;
-  final ThemeData theme;
-  final ColorScheme colorScheme;
+class _Chip extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final bool isMint;
+  final bool isIcon;
+  final VoidCallback? onTap;
+  const _Chip({required this.label, this.isSelected = false, this.isMint = false, this.isIcon = false, this.onTap});
 
-  const _AmountDisplay({
-    required this.controller,
-    required this.activeColor,
-    required this.theme,
-    required this.colorScheme,
-  });
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8.0),
+      child: Tappable(
+        onTap: onTap ?? () {},
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.symmetric(horizontal: isIcon ? 14 : 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+            border: Border.all(color: isMint ? const Color(0xFF63BA9E) : Theme.of(context).colorScheme.outlineVariant),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 14)),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final List<String> bullets;
+  final bool isSelected;
+  const _TypeCard({required this.icon, required this.title, required this.bullets, this.isSelected = false});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: activeColor.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: activeColor.withValues(alpha: 0.25),
-        ),
+        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(16),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            AppConstants.currencySymbol,
-            style: theme.textTheme.headlineLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: activeColor,
-              fontSize: 34,
-            ),
+          Row(
+            children: [
+               Icon(icon, color: Colors.white, size: 24),
+               const SizedBox(width: 12),
+               Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(
-                    RegExp(r'^\d*\.?\d{0,2}')),
-              ],
-              style: theme.textTheme.headlineLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-                color: colorScheme.onSurface,
-                fontSize: 34,
-              ),
-              decoration: InputDecoration(
-                hintText: '0.00',
-                hintStyle: TextStyle(
-                  color: colorScheme.onSurface.withValues(alpha: 0.3),
-                  fontWeight: FontWeight.w700,
-                  fontSize: 34,
-                ),
-                border: InputBorder.none,
-                filled: false,
-                contentPadding: EdgeInsets.zero,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Category grid ──
-class _CategoryGrid extends StatelessWidget {
-  final List<CategoryModel> categories;
-  final String? selectedId;
-  final Color activeColor;
-  final ColorScheme colorScheme;
-  final ValueChanged<String> onSelected;
-
-  const _CategoryGrid({
-    required this.categories,
-    required this.selectedId,
-    required this.activeColor,
-    required this.colorScheme,
-    required this.onSelected,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (categories.isEmpty) {
-      return Padding(
-        padding: const EdgeInsets.all(24),
-        child: Text(
-          'No categories available',
-          style: TextStyle(color: colorScheme.outline),
-          textAlign: TextAlign.center,
-        ),
-      );
-    }
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: categories.asMap().entries.map((entry) {
-        final cat = entry.value;
-        final isSelected = cat.id == selectedId;
-        final catColor =
-            Color(int.parse('FF${cat.colorHex}', radix: 16));
-
-        return GestureDetector(
-          onTap: () {
-            HapticFeedback.selectionClick();
-            onSelected(cat.id);
-          },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOutCubic,
-            width: 76,
-            padding:
-                const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? catColor.withValues(alpha: 0.12)
-                  : colorScheme.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: isSelected ? catColor : Colors.transparent,
-                width: 2,
-              ),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+          if (bullets.isNotEmpty) const SizedBox(height: 12),
+          ...bullets.map((b) => Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  IconData(cat.iconCodePoint,
-                      fontFamily: 'Phosphor-Fill',
-                      fontPackage: 'phosphor_flutter'),
-                  size: 24,
-                  color: isSelected
-                      ? catColor
-                      : colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  cat.name,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: isSelected
-                        ? FontWeight.w700
-                        : FontWeight.w500,
-                    color: isSelected
-                        ? catColor
-                        : colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                 const Padding(
+                   padding: EdgeInsets.only(top: 6.0, right: 8.0),
+                   child: CircleAvatar(radius: 2, backgroundColor: Colors.white70),
+                 ),
+                 Expanded(child: Text(b, style: const TextStyle(color: Colors.white70, height: 1.4))),
               ],
             ),
-          ),
-        )
-            .animate(delay: (entry.key * 30).ms)
-            .scale(
-                begin: const Offset(0.9, 0.9),
-                end: const Offset(1, 1),
-                duration: 250.ms,
-                curve: Curves.easeOutBack);
-      }).toList(),
-    );
-  }
-}
-
-// ── Date selector ──
-class _DateSelector extends StatelessWidget {
-  final DateTime date;
-  final Color activeColor;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-  final VoidCallback onTap;
-
-  const _DateSelector({
-    required this.date,
-    required this.activeColor,
-    required this.colorScheme,
-    required this.theme,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final selected = DateTime(date.year, date.month, date.day);
-    final isToday = today == selected;
-
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Row(
-          children: [
-            Icon(PhosphorIconsFill.calendarBlank,
-                color: activeColor, size: 22),
-            const SizedBox(width: 12),
-            Text(
-              isToday ? 'Today' : DateFormat('EEE, d MMM yyyy').format(date),
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const Spacer(),
-            Icon(PhosphorIconsRegular.caretRight,
-                color: colorScheme.outline, size: 20),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ── Cashew SaveBottomButton — sticky footer ──
-class _SaveBottomButton extends StatelessWidget {
-  final bool isEditing;
-  final Color color;
-  final VoidCallback onSave;
-
-  const _SaveBottomButton({
-    required this.isEditing,
-    required this.color,
-    required this.onSave,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 12),
-        child: SizedBox(
-          height: 54,
-          child: FilledButton.icon(
-            onPressed: onSave,
-            icon: Icon(
-              isEditing ? Icons.check_rounded : Icons.add_rounded,
-              size: 22,
-            ),
-            label: Text(
-              isEditing ? 'Update Transaction' : 'Save Transaction',
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            style: FilledButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ).animate().fadeIn(duration: 300.ms).slideY(begin: 0.1, end: 0),
-        ),
+          ))
+        ],
       ),
     );
   }

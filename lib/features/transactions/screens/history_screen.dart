@@ -11,7 +11,7 @@ import '../../../core/database/models/category_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/formatters.dart';
-import '../../../core/utils/constants.dart';
+
 import 'add_transaction_screen.dart';
 
 // ── Filter State ──
@@ -42,9 +42,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     // Apply filters
     var filtered = allTransactions.where((t) {
       if (_filter == HistoryFilter.income &&
-          t.type != TransactionType.income) return false;
+          t.type != TransactionType.income) {
+        return false;
+      }
       if (_filter == HistoryFilter.expense &&
-          t.type != TransactionType.expense) return false;
+          t.type != TransactionType.expense) {
+        return false;
+      }
       if (_categoryFilter != null && t.categoryId != _categoryFilter) {
         return false;
       }

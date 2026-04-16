@@ -1,9 +1,10 @@
 // features/dashboard/screens/dashboard_screen.dart
-// Main dashboard with balance card, budget progress, and weekly spending chart.
+// Cashew-inspired dashboard: greeting header, sliding filter, weekly chart, recent transactions.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
 
@@ -15,20 +16,43 @@ import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
 
-class DashboardScreen extends ConsumerWidget {
+// ── Sliding filter enum ──
+enum _SpendingFilter { all, expense, income }
+
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  _SpendingFilter _filter = _SpendingFilter.all;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  String _getGreeting() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final transactions = ref.watch(transactionProvider);
     final budget = ref.watch(budgetProvider);
     final categories = ref.watch(categoryProvider);
-
     final now = DateTime.now();
 
-    // ── Calculations ──
+    // ── Monthly calculations ──
     final monthTransactions = transactions
         .where((t) => t.date.year == now.year && t.date.month == now.month)
         .toList();
@@ -42,12 +66,11 @@ class DashboardScreen extends ConsumerWidget {
         .fold(0.0, (sum, t) => sum + t.amount);
 
     final balance = totalIncome - totalExpense;
-
     final budgetLimit = budget.monthlyLimit;
     final budgetProgress =
         budgetLimit > 0 ? (totalExpense / budgetLimit).clamp(0.0, 1.5) : 0.0;
 
-    // Last 7 days spending
+    // ── Last 7 days ──
     final last7Days = List.generate(7, (i) {
       final day = DateTime(now.year, now.month, now.day)
           .subtract(Duration(days: 6 - i));
@@ -60,39 +83,38 @@ class DashboardScreen extends ConsumerWidget {
       return _DaySpending(day: day, amount: dayExpenses);
     });
 
-    // Recent transactions (last 5)
-    final recent = transactions.take(5).toList();
+    // ── Filter + group recent transactions ──
+    final filteredTransactions = transactions.where((t) {
+      if (_filter == _SpendingFilter.expense) return t.type == TransactionType.expense;
+      if (_filter == _SpendingFilter.income) return t.type == TransactionType.income;
+      return true;
+    }).take(10).toList();
+
+    // Group by day
+    final grouped = <String, List<TransactionModel>>{};
+    for (final t in filteredTransactions) {
+      final key = Formatters.dateRelative(t.date);
+      grouped.putIfAbsent(key, () => []).add(t);
+    }
+
     final categoryMap = {for (var c in categories) c.id: c};
 
     return Scaffold(
       body: CustomScrollView(
+        controller: _scrollController,
+        physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── App Bar ──
-          SliverAppBar.large(
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Expenso',
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              IconButton(
-                icon: const Icon(PhosphorIconsRegular.bell),
-                onPressed: () {},
-                tooltip: 'Notifications',
-              ),
-              const SizedBox(width: 8),
-            ],
+          // ── Cashew-style Greeting App Bar ──
+          _GreetingAppBar(
+            greeting: _getGreeting(),
+            month: DateFormat('MMMM yyyy').format(now),
+            colorScheme: colorScheme,
+            theme: theme,
           ),
 
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.symmetric(horizontal: 18),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -103,8 +125,8 @@ class DashboardScreen extends ConsumerWidget {
                     expense: totalExpense,
                     colorScheme: colorScheme,
                     theme: theme,
-                  ),
-                  const SizedBox(height: 20),
+                  ).animate().fadeIn(duration: 400.ms).slideY(begin: 0.08, end: 0),
+                  const SizedBox(height: 16),
 
                   // ── Budget Progress ──
                   _BudgetCard(
@@ -115,82 +137,137 @@ class DashboardScreen extends ConsumerWidget {
                     theme: theme,
                     onSetBudget: () =>
                         _showBudgetDialog(context, ref, budgetLimit),
-                  ),
+                  ).animate().fadeIn(delay: 80.ms, duration: 400.ms).slideY(begin: 0.08, end: 0),
                   const SizedBox(height: 20),
 
                   // ── Weekly Chart ──
                   Text(
                     'Last 7 Days',
                     style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10),
                   _WeeklyChart(
                     data: last7Days,
                     colorScheme: colorScheme,
                     theme: theme,
-                  ),
+                  ).animate().fadeIn(delay: 140.ms, duration: 400.ms),
                   const SizedBox(height: 24),
 
-                  // ── Recent Transactions ──
+                  // ── Sliding income/expense selector (Cashew SlidingSelectorIncomeExpense) ──
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        'Recent Transactions',
+                        'Recent',
                         style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                       if (transactions.isNotEmpty)
                         TextButton(
-                          onPressed: () {
-                            // Navigate to history tab — index 1
-                          },
+                          onPressed: () {},
                           child: const Text('See all'),
                         ),
                     ],
                   ),
                   const SizedBox(height: 8),
-
-                  if (recent.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 32),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(PhosphorIconsDuotone.plusCircle,
-                                size: 48,
-                                color: colorScheme.primary
-                                    .withValues(alpha: 0.4)),
-                            const SizedBox(height: 12),
-                            Text(
-                              'Tap + to add your first transaction',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    ...recent.map((t) {
-                      final cat = categoryMap[t.categoryId];
-                      return _RecentTransactionTile(
-                        transaction: t,
-                        category: cat,
-                        colorScheme: colorScheme,
-                        theme: theme,
-                      );
-                    }),
-
-                  const SizedBox(height: 100),
+                  _SlidingFilterSelector(
+                    selected: _filter,
+                    onChanged: (f) => setState(() => _filter = f),
+                    colorScheme: colorScheme,
+                  ),
+                  const SizedBox(height: 12),
                 ],
               ),
             ),
           ),
+
+          // ── Grouped recent transactions ──
+          if (filteredTransactions.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 18),
+                child: Center(
+                  child: Column(
+                    children: [
+                      Icon(PhosphorIconsDuotone.plusCircle,
+                          size: 48,
+                          color: colorScheme.primary.withValues(alpha: 0.4)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Tap Add to record your first transaction',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          else
+            ...grouped.entries.map((entry) {
+              // compute daily total (net: income positive, expense negative)
+              double dayTotal = entry.value.fold(0.0, (s, t) {
+                return s + (t.type == TransactionType.income ? t.amount : -t.amount);
+              });
+              final isPositiveDay = dayTotal >= 0;
+
+              return SliverMainAxisGroup(
+                slivers: [
+                  // Date divider with daily total (Cashew DateDivider)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding:
+                          const EdgeInsets.fromLTRB(18, 4, 18, 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            entry.key,
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.primary,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                          Text(
+                            '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayTotal)}',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: isPositiveDay
+                                  ? const Color(0xFF59A849)
+                                  : const Color(0xFFCA5A5A),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  SliverList.builder(
+                    itemCount: entry.value.length,
+                    itemBuilder: (context, index) {
+                      final t = entry.value[index];
+                      final cat = categoryMap[t.categoryId];
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
+                        child: _RecentTransactionTile(
+                          transaction: t,
+                          category: cat,
+                          colorScheme: colorScheme,
+                          theme: theme,
+                          index: index,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              );
+            }),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
@@ -198,8 +275,8 @@ class DashboardScreen extends ConsumerWidget {
 
   void _showBudgetDialog(
       BuildContext context, WidgetRef ref, double currentLimit) {
-    final controller =
-        TextEditingController(text: currentLimit > 0 ? currentLimit.toStringAsFixed(0) : '');
+    final controller = TextEditingController(
+        text: currentLimit > 0 ? currentLimit.toStringAsFixed(0) : '');
 
     showDialog(
       context: context,
@@ -236,7 +313,132 @@ class DashboardScreen extends ConsumerWidget {
 }
 
 // ══════════════════════════════════════════════════
-//  Dashboard Widgets
+//  Greeting App Bar (Cashew HomePageUsername style)
+// ══════════════════════════════════════════════════
+
+class _GreetingAppBar extends StatelessWidget {
+  final String greeting;
+  final String month;
+  final ColorScheme colorScheme;
+  final ThemeData theme;
+
+  const _GreetingAppBar({
+    required this.greeting,
+    required this.month,
+    required this.colorScheme,
+    required this.theme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverAppBar(
+      expandedHeight: 120,
+      floating: true,
+      snap: true,
+      pinned: false,
+      backgroundColor: colorScheme.surface,
+      surfaceTintColor: Colors.transparent,
+      flexibleSpace: FlexibleSpaceBar(
+        collapseMode: CollapseMode.parallax,
+        titlePadding: const EdgeInsetsDirectional.only(start: 18, bottom: 14),
+        title: Text(
+          month,
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: colorScheme.onSurfaceVariant,
+          ),
+        ),
+        background: Padding(
+          padding: EdgeInsets.only(
+            left: 18,
+            right: 18,
+            top: MediaQuery.of(context).padding.top + 12,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                greeting,
+                style: theme.textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: colorScheme.onSurface,
+                  height: 1.1,
+                ),
+              ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.1, end: 0),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  Sliding Filter (Cashew SlidingSelectorIncomeExpense)
+// ══════════════════════════════════════════════════
+
+class _SlidingFilterSelector extends StatelessWidget {
+  final _SpendingFilter selected;
+  final ValueChanged<_SpendingFilter> onChanged;
+  final ColorScheme colorScheme;
+
+  const _SlidingFilterSelector({
+    required this.selected,
+    required this.onChanged,
+    required this.colorScheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(3),
+      child: Row(
+        children: [
+          _filterChip('All', _SpendingFilter.all),
+          _filterChip('Expense', _SpendingFilter.expense),
+          _filterChip('Income', _SpendingFilter.income),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, _SpendingFilter filter) {
+    final isSelected = selected == filter;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(filter),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ══════════════════════════════════════════════════
+//  Balance Card
 // ══════════════════════════════════════════════════
 
 class _BalanceCard extends StatelessWidget {
@@ -261,7 +463,7 @@ class _BalanceCard extends StatelessWidget {
         gradient: LinearGradient(
           colors: [
             colorScheme.primary,
-            colorScheme.primary.withValues(alpha: 0.8),
+            colorScheme.primary.withValues(alpha: 0.75),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -269,9 +471,9 @@ class _BalanceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: colorScheme.primary.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+            color: colorScheme.primary.withValues(alpha: 0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
@@ -281,7 +483,7 @@ class _BalanceCard extends StatelessWidget {
           Text(
             'Total Balance',
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: Colors.white.withValues(alpha: 0.8),
+              color: Colors.white.withValues(alpha: 0.75),
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -291,6 +493,7 @@ class _BalanceCard extends StatelessWidget {
             style: theme.textTheme.headlineLarge?.copyWith(
               color: Colors.white,
               fontWeight: FontWeight.w800,
+              fontSize: 32,
             ),
           ),
           const SizedBox(height: 20),
@@ -300,14 +503,14 @@ class _BalanceCard extends StatelessWidget {
                 icon: PhosphorIconsFill.arrowDown,
                 label: 'Income',
                 amount: Formatters.currencyCompact(income),
-                iconColor: Colors.greenAccent.shade200,
+                iconColor: const Color(0xFF62CA77),
               ),
-              const SizedBox(width: 24),
+              const SizedBox(width: 28),
               _BalanceMini(
                 icon: PhosphorIconsFill.arrowUp,
                 label: 'Expense',
                 amount: Formatters.currencyCompact(expense),
-                iconColor: Colors.redAccent.shade100,
+                iconColor: const Color(0xFFDA7272),
               ),
             ],
           ),
@@ -334,14 +537,14 @@ class _BalanceMini extends StatelessWidget {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(6),
+          padding: const EdgeInsets.all(7),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15),
-            borderRadius: BorderRadius.circular(8),
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(10),
           ),
           child: Icon(icon, size: 16, color: iconColor),
         ),
-        const SizedBox(width: 8),
+        const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -351,7 +554,7 @@ class _BalanceMini extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.7))),
             Text(amount,
                 style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
                     color: Colors.white)),
           ],
@@ -361,7 +564,10 @@ class _BalanceMini extends StatelessWidget {
   }
 }
 
-// ── Budget Progress Card ──
+// ══════════════════════════════════════════════════
+//  Budget Progress Card
+// ══════════════════════════════════════════════════
+
 class _BudgetCard extends StatelessWidget {
   final double limit, spent, progress;
   final ColorScheme colorScheme;
@@ -387,7 +593,7 @@ class _BudgetCard extends StatelessWidget {
         onTap: onSetBudget,
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: colorScheme.surfaceContainerLow,
             borderRadius: BorderRadius.circular(20),
@@ -413,8 +619,7 @@ class _BudgetCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(PhosphorIconsRegular.caretRight,
-                  color: colorScheme.outline),
+              Icon(PhosphorIconsRegular.caretRight, color: colorScheme.outline),
             ],
           ),
         ),
@@ -425,7 +630,7 @@ class _BudgetCard extends StatelessWidget {
       onTap: onSetBudget,
       child: Container(
         width: double.infinity,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(20),
@@ -443,22 +648,29 @@ class _BudgetCard extends StatelessWidget {
                   '${(progress * 100).toStringAsFixed(0)}%',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: isOver ? Colors.red.shade400 : colorScheme.primary,
+                    color: isOver
+                        ? const Color(0xFFCA5A5A)
+                        : colorScheme.primary,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            // Progress bar
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                minHeight: 10,
-                backgroundColor:
-                    colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isOver ? Colors.red.shade400 : colorScheme.primary,
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0, end: progress.clamp(0.0, 1.0)),
+                duration: const Duration(milliseconds: 800),
+                curve: Curves.easeOutCubic,
+                builder: (_, value, __) => LinearProgressIndicator(
+                  value: value,
+                  minHeight: 10,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isOver
+                        ? const Color(0xFFCA5A5A)
+                        : colorScheme.primary,
+                  ),
                 ),
               ),
             ),
@@ -478,7 +690,9 @@ class _BudgetCard extends StatelessWidget {
                       : 'Left: ${Formatters.currencyCompact(remaining)}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: isOver ? Colors.red.shade400 : Colors.green.shade500,
+                    color: isOver
+                        ? const Color(0xFFCA5A5A)
+                        : const Color(0xFF59A849),
                   ),
                 ),
               ],
@@ -490,7 +704,10 @@ class _BudgetCard extends StatelessWidget {
   }
 }
 
-// ── Weekly Spending Chart ──
+// ══════════════════════════════════════════════════
+//  Weekly Bar Chart
+// ══════════════════════════════════════════════════
+
 class _DaySpending {
   final DateTime day;
   final double amount;
@@ -527,7 +744,8 @@ class _WeeklyChart extends StatelessWidget {
           barTouchData: BarTouchData(
             enabled: true,
             touchTooltipData: BarTouchTooltipData(
-              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              tooltipPadding:
+                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               tooltipRoundedRadius: 10,
               getTooltipItem: (group, groupIndex, rod, rodIndex) {
                 return BarTooltipItem(
@@ -543,9 +761,12 @@ class _WeeklyChart extends StatelessWidget {
           ),
           titlesData: FlTitlesData(
             show: true,
-            topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-            leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            topTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            rightTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+            leftTitles:
+                const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
@@ -578,10 +799,20 @@ class _WeeklyChart extends StatelessWidget {
               barRods: [
                 BarChartRodData(
                   toY: entry.value.amount > 0 ? entry.value.amount : 0,
+                  gradient: isToday
+                      ? LinearGradient(
+                          colors: [
+                            colorScheme.primary,
+                            colorScheme.primary.withValues(alpha: 0.7),
+                          ],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                        )
+                      : null,
                   color: isToday
-                      ? colorScheme.primary
-                      : colorScheme.primary.withValues(alpha: 0.35),
-                  width: 28,
+                      ? null
+                      : colorScheme.primary.withValues(alpha: 0.3),
+                  width: 26,
                   borderRadius: const BorderRadius.vertical(
                     top: Radius.circular(8),
                   ),
@@ -589,31 +820,37 @@ class _WeeklyChart extends StatelessWidget {
                     show: true,
                     toY: maxAmount > 0 ? maxAmount * 1.3 : 100,
                     color: colorScheme.surfaceContainerHighest
-                        .withValues(alpha: 0.4),
+                        .withValues(alpha: 0.5),
                   ),
                 ),
               ],
             );
           }).toList(),
         ),
-        swapAnimationDuration: const Duration(milliseconds: 300),
+        swapAnimationDuration: const Duration(milliseconds: 600),
+        swapAnimationCurve: Curves.easeOutCubic,
       ),
     );
   }
 }
 
-// ── Recent Transaction Tile ──
+// ══════════════════════════════════════════════════
+//  Recent Transaction Tile (Cashew-style with accent bar)
+// ══════════════════════════════════════════════════
+
 class _RecentTransactionTile extends StatelessWidget {
   final TransactionModel transaction;
   final CategoryModel? category;
   final ColorScheme colorScheme;
   final ThemeData theme;
+  final int index;
 
   const _RecentTransactionTile({
     required this.transaction,
     required this.category,
     required this.colorScheme,
     required this.theme,
+    required this.index,
   });
 
   @override
@@ -624,15 +861,19 @@ class _RecentTransactionTile extends StatelessWidget {
         : colorScheme.outline;
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 6),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(
           color: colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Row(
           children: [
+            // Cashew left accent bar
+            Container(width: 4, height: 56, color: catColor),
+            const SizedBox(width: 12),
+            // Category icon
             Container(
               width: 40,
               height: 40,
@@ -661,27 +902,36 @@ class _RecentTransactionTile extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Text(
-                    Formatters.dateRelative(transaction.date),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.outline,
-                      fontSize: 11,
+                  if (transaction.note != null && transaction.note!.isNotEmpty)
+                    Text(
+                      transaction.note!,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
                 ],
               ),
             ),
-            Text(
-              '${isExpense ? '−' : '+'}${Formatters.currency(transaction.amount)}',
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-                color:
-                    isExpense ? Colors.red.shade400 : Colors.green.shade500,
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Text(
+                '${isExpense ? '−' : '+'}${Formatters.currency(transaction.amount)}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: isExpense
+                      ? const Color(0xFFCA5A5A)
+                      : const Color(0xFF59A849),
+                ),
               ),
             ),
           ],
         ),
       ),
-    );
+    )
+        .animate(delay: (index * 40).ms)
+        .fadeIn(duration: 300.ms)
+        .slideX(begin: 0.04, end: 0);
   }
 }

@@ -10,6 +10,7 @@ import '../../features/transactions/screens/history_screen.dart';
 import '../../features/transactions/screens/add_transaction_screen.dart';
 import '../../features/insights/screens/insights_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
+import '../../core/database/models/transaction_model.dart';
 import 'navigation_shell.dart';
 
 /// Route path constants.
@@ -102,7 +103,10 @@ final GoRouter appRouter = GoRouter(
     // --- Full-screen routes (pushed on top of shell) ---
     GoRoute(
       path: AppRoutes.addTransaction,
-      builder: (context, state) => const AddTransactionScreen(),
+      builder: (context, state) {
+        final existing = state.extra as TransactionModel?;
+        return AddTransactionScreen(existingTransaction: existing);
+      },
     ),
   ],
 );

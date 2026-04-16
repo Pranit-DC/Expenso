@@ -1,21 +1,22 @@
 // features/transactions/screens/history_screen.dart
-// Transaction history with date grouping, filters, and swipe-to-delete.
+// Cashew-inspired transaction history: sticky filter chips, daily dividers with totals, accent bars.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/models/category_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/routing/app_router.dart';
 
-import 'add_transaction_screen.dart';
-
-// ── Filter State ──
-enum HistoryFilter { all, income, expense }
+enum _HistoryFilter { all, expense, income }
 
 class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
@@ -25,42 +26,27 @@ class HistoryScreen extends ConsumerStatefulWidget {
 }
 
 class _HistoryScreenState extends ConsumerState<HistoryScreen> {
-  HistoryFilter _filter = HistoryFilter.all;
-  String? _categoryFilter;
-  DateTimeRange? _dateRange;
+  _HistoryFilter _filter = _HistoryFilter.all;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final allTransactions = ref.watch(transactionProvider);
+    final transactions = ref.watch(transactionProvider);
     final categories = ref.watch(categoryProvider);
-
-    // Build category lookup map
     final categoryMap = {for (var c in categories) c.id: c};
 
-    // Apply filters
-    var filtered = allTransactions.where((t) {
-      if (_filter == HistoryFilter.income &&
-          t.type != TransactionType.income) {
-        return false;
+    // Apply filter
+    final filtered = transactions.where((t) {
+      if (_filter == _HistoryFilter.expense) {
+        return t.type == TransactionType.expense;
       }
-      if (_filter == HistoryFilter.expense &&
-          t.type != TransactionType.expense) {
-        return false;
-      }
-      if (_categoryFilter != null && t.categoryId != _categoryFilter) {
-        return false;
-      }
-      if (_dateRange != null) {
-        if (t.date.isBefore(_dateRange!.start) ||
-            t.date.isAfter(
-                _dateRange!.end.add(const Duration(days: 1)))) {
-          return false;
-        }
+      if (_filter == _HistoryFilter.income) {
+        return t.type == TransactionType.income;
       }
       return true;
-    }).toList();
+    }).toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
 
     // Group by date
     final grouped = <String, List<TransactionModel>>{};
@@ -71,243 +57,239 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
 
     return Scaffold(
       body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverAppBar.large(
+          SliverAppBar.medium(
             title: const Text('History'),
-            actions: [
-              IconButton(
-                icon: Badge(
-                  isLabelVisible: _filter != HistoryFilter.all ||
-                      _categoryFilter != null ||
-                      _dateRange != null,
-                  child: const Icon(PhosphorIconsRegular.funnel),
-                ),
-                onPressed: () => _showFilterSheet(context, categories),
-                tooltip: 'Filters',
-              ),
-              const SizedBox(width: 8),
-            ],
+            pinned: true,
+          ),
+
+          // ── Sticky filter chips (always visible, Cashew incomeExpenseTabSelector) ──
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: _FilterHeaderDelegate(
+              filter: _filter,
+              onChanged: (f) {
+                HapticFeedback.selectionClick();
+                setState(() => _filter = f);
+              },
+              colorScheme: colorScheme,
+              theme: theme,
+            ),
           ),
 
           if (filtered.isEmpty)
             SliverFillRemaining(
-              hasScrollBody: false,
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      PhosphorIconsDuotone.receipt,
+                      PhosphorIconsDuotone.clockCounterClockwise,
                       size: 64,
-                      color: colorScheme.primary.withValues(alpha: 0.4),
-                    ),
+                      color: colorScheme.primary.withValues(alpha: 0.35),
+                    ).animate().scale(duration: 400.ms, curve: Curves.elasticOut),
                     const SizedBox(height: 16),
                     Text(
-                      'No transactions found',
+                      'No transactions yet',
                       style: theme.textTheme.bodyLarge?.copyWith(
                         color: colorScheme.onSurfaceVariant,
                       ),
                     ),
-                    if (_filter != HistoryFilter.all ||
-                        _categoryFilter != null ||
-                        _dateRange != null) ...[
-                      const SizedBox(height: 8),
-                      TextButton(
-                        onPressed: () => setState(() {
-                          _filter = HistoryFilter.all;
-                          _categoryFilter = null;
-                          _dateRange = null;
-                        }),
-                        child: const Text('Clear filters'),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Tap Add to record a transaction',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colorScheme.outline,
                       ),
-                    ],
+                    ),
                   ],
                 ),
               ),
             )
           else
-            ...grouped.entries.map((entry) {
-              return SliverMainAxisGroup(
-                slivers: [
-                  // Date header
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                      child: Text(
-                        entry.key,
-                        style: theme.textTheme.titleSmall?.copyWith(
+            ...grouped.entries.expand((entry) sync* {
+              final dateKey = entry.key;
+              final dayTransactions = entry.value;
+
+              // Compute daily net
+              double dayNet = dayTransactions.fold(0.0, (s, t) {
+                return s + (t.type == TransactionType.income ? t.amount : -t.amount);
+              });
+              final isPositiveDay = dayNet >= 0;
+
+              // Date divider sliver
+              yield SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 4),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        dateKey,
+                        style: theme.textTheme.labelLarge?.copyWith(
                           fontWeight: FontWeight.w700,
                           color: colorScheme.primary,
+                          letterSpacing: 0.3,
                         ),
                       ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: (isPositiveDay
+                                  ? const Color(0xFF59A849)
+                                  : const Color(0xFFCA5A5A))
+                              .withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayNet)}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isPositiveDay
+                                ? const Color(0xFF59A849)
+                                : const Color(0xFFCA5A5A),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+
+              // Transaction tiles sliver
+              yield SliverList.separated(
+                itemCount: dayTransactions.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final t = dayTransactions[index];
+                  final cat = categoryMap[t.categoryId];
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: _HistoryTile(
+                      transaction: t,
+                      category: cat,
+                      colorScheme: colorScheme,
+                      theme: theme,
+                      index: index,
+                      onEdit: () => context.push(
+                        AppRoutes.addTransaction,
+                        extra: t,
+                      ),
+                      onDelete: () {
+                        ref
+                            .read(transactionProvider.notifier)
+                            .delete(t.id);
+                      },
                     ),
-                  ),
-                  // Transaction items
-                  SliverList.builder(
-                    itemCount: entry.value.length,
-                    itemBuilder: (context, index) {
-                      final t = entry.value[index];
-                      final cat = categoryMap[t.categoryId];
-                      return _TransactionTile(
-                        transaction: t,
-                        category: cat,
-                        colorScheme: colorScheme,
-                        theme: theme,
-                        onTap: () => _editTransaction(t),
-                        onDelete: () => _deleteTransaction(t.id),
-                      );
-                    },
-                  ),
-                ],
+                  );
+                },
               );
             }),
-          // Bottom padding
+
           const SliverToBoxAdapter(child: SizedBox(height: 100)),
         ],
       ),
     );
   }
+}
 
-  void _editTransaction(TransactionModel t) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => AddTransactionScreen(existingTransaction: t),
+// ── Persistent filter header delegate ──
+class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
+  final _HistoryFilter filter;
+  final ValueChanged<_HistoryFilter> onChanged;
+  final ColorScheme colorScheme;
+  final ThemeData theme;
+
+  _FilterHeaderDelegate({
+    required this.filter,
+    required this.onChanged,
+    required this.colorScheme,
+    required this.theme,
+  });
+
+  @override
+  double get minExtent => 56;
+  @override
+  double get maxExtent => 56;
+  @override
+  bool shouldRebuild(covariant _FilterHeaderDelegate old) =>
+      old.filter != filter;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: colorScheme.surface,
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      child: Container(
+        height: 40,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.all(3),
+        child: Row(
+          children: [
+            _chip('All', _HistoryFilter.all),
+            _chip('Expense', _HistoryFilter.expense),
+            _chip('Income', _HistoryFilter.income),
+          ],
+        ),
       ),
     );
   }
 
-  void _deleteTransaction(String id) {
-    ref.read(transactionProvider.notifier).delete(id);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Transaction deleted'),
-        behavior: SnackBarBehavior.floating,
+  Widget _chip(String label, _HistoryFilter f) {
+    final isSelected = filter == f;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onChanged(f),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: isSelected ? colorScheme.primaryContainer : Colors.transparent,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected
+                    ? colorScheme.onPrimaryContainer
+                    : colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        ),
       ),
-    );
-  }
-
-  void _showFilterSheet(
-      BuildContext context, List<CategoryModel> categories) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return DraggableScrollableSheet(
-              expand: false,
-              initialChildSize: 0.5,
-              maxChildSize: 0.7,
-              minChildSize: 0.3,
-              builder: (_, scrollCtrl) {
-                return ListView(
-                  controller: scrollCtrl,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  children: [
-                    const SizedBox(height: 8),
-                    Text(
-                      'Filters',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Type filter
-                    Text('Type',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    SegmentedButton<HistoryFilter>(
-                      segments: const [
-                        ButtonSegment(
-                            value: HistoryFilter.all, label: Text('All')),
-                        ButtonSegment(
-                            value: HistoryFilter.income,
-                            label: Text('Income')),
-                        ButtonSegment(
-                            value: HistoryFilter.expense,
-                            label: Text('Expense')),
-                      ],
-                      selected: {_filter},
-                      onSelectionChanged: (s) {
-                        setSheetState(() => _filter = s.first);
-                        setState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Date range
-                    Text('Date Range',
-                        style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.onSurfaceVariant)),
-                    const SizedBox(height: 8),
-                    OutlinedButton.icon(
-                      onPressed: () async {
-                        final picked = await showDateRangePicker(
-                          context: context,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime.now(),
-                          initialDateRange: _dateRange,
-                        );
-                        if (picked != null) {
-                          setSheetState(() => _dateRange = picked);
-                          setState(() {});
-                        }
-                      },
-                      icon: const Icon(PhosphorIconsRegular.calendarBlank),
-                      label: Text(_dateRange == null
-                          ? 'Select date range'
-                          : '${Formatters.dateShort(_dateRange!.start)} — ${Formatters.dateShort(_dateRange!.end)}'),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Clear all
-                    if (_filter != HistoryFilter.all ||
-                        _categoryFilter != null ||
-                        _dateRange != null)
-                      TextButton(
-                        onPressed: () {
-                          setSheetState(() {
-                            _filter = HistoryFilter.all;
-                            _categoryFilter = null;
-                            _dateRange = null;
-                          });
-                          setState(() {});
-                        },
-                        child: const Text('Clear all filters'),
-                      ),
-                    const SizedBox(height: 20),
-                  ],
-                );
-              },
-            );
-          },
-        );
-      },
     );
   }
 }
 
-// ─── Transaction Tile ───
-class _TransactionTile extends StatelessWidget {
+// ── History Transaction Tile ──
+class _HistoryTile extends StatelessWidget {
   final TransactionModel transaction;
   final CategoryModel? category;
   final ColorScheme colorScheme;
   final ThemeData theme;
-  final VoidCallback onTap;
+  final int index;
+  final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const _TransactionTile({
+  const _HistoryTile({
     required this.transaction,
     required this.category,
     required this.colorScheme,
     required this.theme,
-    required this.onTap,
+    required this.index,
+    required this.onEdit,
     required this.onDelete,
   });
 
@@ -318,93 +300,131 @@ class _TransactionTile extends StatelessWidget {
         ? Color(int.parse('FF${category!.colorHex}', radix: 16))
         : colorScheme.outline;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
-      child: Slidable(
-        endActionPane: ActionPane(
-          motion: const BehindMotion(),
-          extentRatio: 0.25,
+    return Slidable(
+      key: ValueKey(transaction.id),
+      endActionPane: ActionPane(
+        motion: const BehindMotion(),
+        extentRatio: 0.48,
+        children: [
+          CustomSlidableAction(
+            onPressed: (_) => onEdit(),
+            backgroundColor: colorScheme.primaryContainer,
+            foregroundColor: colorScheme.onPrimaryContainer,
+            borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(PhosphorIconsFill.pencilSimple, size: 20),
+                const SizedBox(height: 4),
+                Text('Edit',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+          CustomSlidableAction(
+            onPressed: (_) {
+              HapticFeedback.mediumImpact();
+              onDelete();
+            },
+            backgroundColor: const Color(0xFFCA5A5A),
+            foregroundColor: Colors.white,
+            borderRadius: const BorderRadius.horizontal(right: Radius.circular(16)),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(PhosphorIconsFill.trashSimple, size: 20),
+                const SizedBox(height: 4),
+                const Text('Delete',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Row(
           children: [
-            SlidableAction(
-              onPressed: (_) => onDelete(),
-              backgroundColor: colorScheme.errorContainer,
-              foregroundColor: colorScheme.onErrorContainer,
-              icon: PhosphorIconsBold.trash,
-              borderRadius: BorderRadius.circular(16),
+            // ── Cashew left accent bar ──
+            Container(
+              width: 4,
+              height: 64,
+              color: catColor,
+            ),
+            const SizedBox(width: 12),
+            // ── Category icon ──
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: catColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                category != null
+                    ? IconData(
+                        category!.iconCodePoint,
+                        fontFamily: 'Phosphor-Fill',
+                        fontPackage: 'phosphor_flutter',
+                      )
+                    : PhosphorIconsFill.question,
+                size: 22,
+                color: catColor,
+              ),
+            ),
+            const SizedBox(width: 12),
+            // ── Title + note + date ──
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      category?.name ?? 'Unknown',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    if (transaction.note != null &&
+                        transaction.note!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        transaction.note!,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            // ── Amount ──
+            Padding(
+              padding: const EdgeInsets.only(right: 14),
+              child: Text(
+                '${isExpense ? '−' : '+'}${Formatters.currency(transaction.amount)}',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: isExpense
+                      ? const Color(0xFFCA5A5A)
+                      : const Color(0xFF59A849),
+                ),
+              ),
             ),
           ],
         ),
-        child: Material(
-          color: colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-          child: InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  // Category icon
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      category != null
-                          ? IconData(category!.iconCodePoint,
-                              fontFamily: 'Phosphor-Fill',
-                              fontPackage: 'phosphor_flutter')
-                          : PhosphorIconsFill.question,
-                      size: 22,
-                      color: catColor,
-                    ),
-                  ),
-                  const SizedBox(width: 14),
-
-                  // Name & note
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          category?.name ?? 'Unknown',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (transaction.note != null &&
-                            transaction.note!.isNotEmpty)
-                          Text(
-                            transaction.note!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                      ],
-                    ),
-                  ),
-
-                  // Amount
-                  Text(
-                    '${isExpense ? '−' : '+'}${Formatters.currency(transaction.amount)}',
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: isExpense
-                          ? Colors.red.shade400
-                          : Colors.green.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
-    );
+    )
+        .animate(delay: (index * 30).ms)
+        .fadeIn(duration: 300.ms)
+        .slideX(begin: 0.03, end: 0);
   }
 }

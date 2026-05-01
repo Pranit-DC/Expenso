@@ -10,7 +10,11 @@ enum AppThemePreset {
   sapphire('Sapphire', Color(0xFF1565C0), Color(0xFF0D47A1)),
   amethyst('Amethyst', Color(0xFF7B1FA2), Color(0xFF6A1B9A)),
   amber('Amber', Color(0xFFE65100), Color(0xFFBF360C)),
-  onyx('Onyx', Color(0xFF37474F), Color(0xFF263238));
+  onyx('Onyx', Color(0xFF37474F), Color(0xFF263238)),
+  ruby('Ruby', Color(0xFFC62828), Color(0xFFB71C1C)),
+  gold('Gold', Color(0xFFFBC02D), Color(0xFFF9A825)),
+  indigo('Indigo', Color(0xFF3F51B5), Color(0xFF303F9F)),
+  rose('Rose', Color(0xFFEC407A), Color(0xFFD81B60));
 
   const AppThemePreset(this.label, this.seedColor, this.seedColorDark);
   final String label;
@@ -31,8 +35,20 @@ class AppTheme {
       brightness: brightness,
     );
 
-    final textTheme = GoogleFonts.interTextTheme(
-      isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+    final baseTextTheme = isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme;
+    final textTheme = GoogleFonts.robotoTextTheme(baseTextTheme).copyWith(
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w900,
+        fontSize: 48,
+        color: colorScheme.onSurface,
+        letterSpacing: -1.5,
+      ),
+      titleLarge: baseTextTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w900,
+        fontSize: 28,
+        color: colorScheme.onSurface,
+        letterSpacing: -0.5,
+      ),
     );
 
     return ThemeData(
@@ -42,63 +58,33 @@ class AppTheme {
       brightness: brightness,
 
       // --- Expressive Surface Tints ---
-      scaffoldBackgroundColor: isDark
-          ? colorScheme.surface
-          : colorScheme.surface,
+      scaffoldBackgroundColor: colorScheme.surface,
 
       // --- AppBar ---
       appBarTheme: AppBarTheme(
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
-        scrolledUnderElevation: 2,
-        backgroundColor: Colors.transparent,
-        foregroundColor: colorScheme.onSurface,
-        titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: colorScheme.onSurface,
-        ),
+        scrolledUnderElevation: 3,
+        surfaceTintColor: colorScheme.surfaceTint,
+        titleTextStyle: textTheme.titleLarge,
       ),
 
       // --- Cards ---
       cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
         ),
         color: colorScheme.surfaceContainerLow,
-        surfaceTintColor: colorScheme.primary,
+        margin: EdgeInsets.zero,
       ),
 
       // --- Bottom Navigation ---
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        height: 72,
-        indicatorColor: colorScheme.primaryContainer,
+        height: 80,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        backgroundColor: isDark
-            ? colorScheme.surfaceContainer
-            : colorScheme.surfaceContainerLowest,
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return IconThemeData(
-              color: colorScheme.onPrimaryContainer,
-              size: 24,
-            );
-          }
-          return IconThemeData(
-            color: colorScheme.onSurfaceVariant,
-            size: 24,
-          );
-        }),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final base = textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          );
-          if (states.contains(WidgetState.selected)) {
-            return base?.copyWith(color: colorScheme.onSurface);
-          }
-          return base?.copyWith(color: colorScheme.onSurfaceVariant);
-        }),
+        backgroundColor: colorScheme.surfaceContainer,
       ),
 
       // --- FAB ---
@@ -107,7 +93,7 @@ class AppTheme {
         foregroundColor: colorScheme.onPrimaryContainer,
         elevation: 2,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
 
@@ -132,7 +118,7 @@ class AppTheme {
       // --- Chips ---
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
 

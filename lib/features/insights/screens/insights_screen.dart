@@ -1,17 +1,15 @@
-// features/insights/screens/insights_screen.dart
-// Cashew-inspired: month selector, progress bars per category, animated pie chart.
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter_animate/flutter_animate.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter_heatmap_calendar/flutter_heatmap_calendar.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
+import '../../../core/utils/color_utils.dart';
 import '../../../core/utils/formatters.dart';
 
 class InsightsScreen extends ConsumerStatefulWidget {
@@ -21,40 +19,17 @@ class InsightsScreen extends ConsumerStatefulWidget {
   ConsumerState<InsightsScreen> createState() => _InsightsScreenState();
 }
 
-class _InsightsScreenState extends ConsumerState<InsightsScreen>
-    with SingleTickerProviderStateMixin {
+enum _HeatMapType { expense, income }
+
+class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   int? _hoveredIndex;
-  late AnimationController _pieController;
-  late Animation<double> _pieAnimation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pieController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _pieAnimation = CurvedAnimation(
-      parent: _pieController,
-      curve: Curves.easeOutCubic,
-    );
-    _pieController.forward();
-  }
-
-  @override
-  void dispose() {
-    _pieController.dispose();
-    super.dispose();
-  }
+  _HeatMapType _heatmapType = _HeatMapType.expense;
 
   void _changeMonth(int delta) {
-    HapticFeedback.selectionClick();
     setState(() {
-      _selectedMonth =
-          DateTime(_selectedMonth.year, _selectedMonth.month + delta);
+      _selectedMonth = DateTime(_selectedMonth.year, _selectedMonth.month + delta);
       _hoveredIndex = null;
-      _pieController.forward(from: 0);
     });
   }
 
@@ -66,46 +41,52 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
     final categories = ref.watch(categoryProvider);
     final categoryMap = {for (var c in categories) c.id: c};
     final now = DateTime.now();
-    final isCurrentMonth = _selectedMonth.year == now.year &&
-        _selectedMonth.month == now.month;
+    final isCurrentMonth = _selectedMonth.year == now.year && _selectedMonth.month == now.month;
+
+    // Heatmap data preparation
+    final heatmapData = <DateTime, int>{};
+    final relevantTransactions = transactions.where((t) => t.type == (_heatmapType == _HeatMapType.expense ? TransactionType.expense : TransactionType.income));
+    
+    final dailyTotals = <DateTime, double>{};
+    for (final t in relevantTransactions) {
+      final date = DateTime(t.date.year, t.date.month, t.date.day);
+      dailyTotals.update(date, (v) => v + t.amount, ifAbsent: () => t.amount);
+    }
+
+    if (dailyTotals.isNotEmpty) {
+      final maxVal = dailyTotals.values.fold(0.0, (m, v) => v > m ? v : m);
+      for (final entry in dailyTotals.entries) {
+        // Map to 1-10 scale
+        final intensity = (entry.value / maxVal * 10).ceil();
+        heatmapData[entry.key] = intensity;
+      }
+    }
 
     // Filter by selected month
     final monthExpenses = transactions
-        .where((t) =>
-            t.type == TransactionType.expense &&
-            t.date.year == _selectedMonth.year &&
-            t.date.month == _selectedMonth.month)
+        .where((t) => t.type == TransactionType.expense && t.date.year == _selectedMonth.year && t.date.month == _selectedMonth.month)
         .toList();
 
     final monthIncome = transactions
-        .where((t) =>
-            t.type == TransactionType.income &&
-            t.date.year == _selectedMonth.year &&
-            t.date.month == _selectedMonth.month)
+        .where((t) => t.type == TransactionType.income && t.date.year == _selectedMonth.year && t.date.month == _selectedMonth.month)
         .fold(0.0, (s, t) => s + t.amount);
 
-    final totalExpense =
-        monthExpenses.fold(0.0, (s, t) => s + t.amount);
+    final totalExpense = monthExpenses.fold(0.0, (s, t) => s + t.amount);
 
     // Group by category
     final categoryTotals = <String, double>{};
     for (final t in monthExpenses) {
-      categoryTotals.update(t.categoryId, (v) => v + t.amount,
-          ifAbsent: () => t.amount);
+      categoryTotals.update(t.categoryId, (v) => v + t.amount, ifAbsent: () => t.amount);
     }
 
-    final sortedCategories = categoryTotals.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
+    final sortedCategories = categoryTotals.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 
-    // Pie slices (top 5 + others)
+    // Pie slices
     final slices = <_Slice>[];
     double othersTotal = 0;
     for (int i = 0; i < sortedCategories.length; i++) {
       if (i < 5) {
-        slices.add(_Slice(
-          categoryId: sortedCategories[i].key,
-          amount: sortedCategories[i].value,
-        ));
+        slices.add(_Slice(categoryId: sortedCategories[i].key, amount: sortedCategories[i].value));
       } else {
         othersTotal += sortedCategories[i].value;
       }
@@ -114,145 +95,216 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
       slices.add(_Slice(categoryId: '_others', amount: othersTotal));
     }
 
-    // Pie colors from category colors (fallback palette)
-    final fallbackColors = [
-      const Color(0xFF4CAF50),
-      const Color(0xFF2196F3),
-      const Color(0xFFFF9800),
-      const Color(0xFFE91E63),
-      const Color(0xFF9C27B0),
-      const Color(0xFF607D8B),
-    ];
+    // Pie colors (Monochromatic)
+    final pieColors = ColorUtils.generateMonochromaticPalette(colorScheme.primary, slices.length);
 
-    List<Color> pieColors = slices.asMap().entries.map((e) {
-      final cat = categoryMap[e.value.categoryId];
-      if (cat != null) {
-        return Color(int.parse('FF${cat.colorHex}', radix: 16));
-      }
-      return fallbackColors[e.key % fallbackColors.length];
-    }).toList();
+    // MoM Trend
+    final lastMonthDate = DateTime(_selectedMonth.year, _selectedMonth.month - 1);
+    final lastMonthExpenses = transactions
+        .where((t) => t.type == TransactionType.expense && t.date.year == lastMonthDate.year && t.date.month == lastMonthDate.month)
+        .fold(0.0, (s, t) => s + t.amount);
+    final momDiff = lastMonthExpenses > 0 ? ((totalExpense - lastMonthExpenses) / lastMonthExpenses) * 100 : 0.0;
 
-    // Key metrics
-    final daysPassed = isCurrentMonth
-        ? now.day
-        : DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
+    // Daily Average
+    final daysPassed = isCurrentMonth ? now.day : DateUtils.getDaysInMonth(_selectedMonth.year, _selectedMonth.month);
     final dailyAvg = daysPassed > 0 ? totalExpense / daysPassed : 0.0;
+
+    // Weekday vs Weekend & Top Day
+    double weekdayTotal = 0;
+    double weekendTotal = 0;
     final dayTotals = <int, double>{};
     for (final t in monthExpenses) {
-      dayTotals.update(t.date.day, (v) => v + t.amount,
-          ifAbsent: () => t.amount);
-    }
-    int? highestDay;
-    double highestDayAmount = 0;
-    for (final entry in dayTotals.entries) {
-      if (entry.value > highestDayAmount) {
-        highestDay = entry.key;
-        highestDayAmount = entry.value;
+      final wd = t.date.weekday;
+      dayTotals.update(wd, (v) => v + t.amount, ifAbsent: () => t.amount);
+      if (wd <= 5) {
+        weekdayTotal += t.amount;
+      } else {
+        weekendTotal += t.amount;
       }
     }
+
+    int topDay = 1;
+    double maxDaySum = 0;
+    dayTotals.forEach((day, sum) {
+      if (sum > maxDaySum) {
+        maxDaySum = sum;
+        topDay = day;
+      }
+    });
+    // 2024-01-01 was Monday
+    final topDayName = monthExpenses.isEmpty ? 'N/A' : DateFormat('EEEE').format(DateTime(2024, 1, topDay));
 
     return Scaffold(
       body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
         slivers: [
           SliverAppBar.medium(
             title: const Text('Insights'),
             pinned: true,
           ),
-
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // ── Month selector (Cashew < April 2026 >) ──
-                  _MonthSelector(
-                    month: _selectedMonth,
-                    onPrevious: () => _changeMonth(-1),
-                    onNext: isCurrentMonth ? null : () => _changeMonth(1),
-                    colorScheme: colorScheme,
-                    theme: theme,
-                  ).animate().fadeIn(duration: 350.ms),
-
-                  const SizedBox(height: 16),
-
-                  if (monthExpenses.isEmpty) ...[
-                    SizedBox(
-                      height: 320,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(PhosphorIconsDuotone.chartPieSlice,
-                                    size: 64,
-                                    color: colorScheme.primary
-                                        .withValues(alpha: 0.35))
-                                .animate()
-                                .scale(
-                                    duration: 400.ms,
-                                    curve: Curves.elasticOut),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No spending this month',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                  color: colorScheme.onSurfaceVariant),
-                            ),
-                          ],
+                  // ── Month Selector ──
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      IconButton(
+                        onPressed: () => _changeMonth(-1),
+                        style: IconButton.styleFrom(
+                          backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: Icon(PhosphorIconsBold.caretLeft, size: 18, color: colorScheme.onSurface),
+                      ),
+                      Text(
+                        DateFormat('MMMM yyyy').format(_selectedMonth),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.5,
                         ),
                       ),
-                    ),
-                  ] else ...[
-                    // ── Income vs Expense summary row ──
+                      IconButton(
+                        onPressed: isCurrentMonth ? null : () => _changeMonth(1),
+                        style: IconButton.styleFrom(
+                          backgroundColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: Icon(
+                          PhosphorIconsBold.caretRight,
+                          size: 18,
+                          color: isCurrentMonth ? colorScheme.onSurface.withValues(alpha: 0.3) : colorScheme.onSurface,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  if (monthExpenses.isEmpty)
+                    SizedBox(
+                      height: 300,
+                      child: Center(
+                        child: Text(
+                          'No spending this month',
+                          style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    )
+                  else ...[
+                    // ── Summary Cards ──
                     Row(
                       children: [
                         Expanded(
-                          child: _MiniStatCard(
-                            label: 'Expenses',
-                            value: Formatters.currency(totalExpense),
-                            icon: PhosphorIconsFill.arrowUp,
-                            iconColor: const Color(0xFFCA5A5A),
-                            colorScheme: colorScheme,
-                            theme: theme,
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.arrow_upward, size: 16, color: colorScheme.error),
+                                      const SizedBox(width: 8),
+                                      const Text('Expenses', style: TextStyle(fontSize: 10)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(Formatters.currencyCompact(totalExpense), style: theme.textTheme.titleLarge),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Expanded(
-                          child: _MiniStatCard(
-                            label: 'Income',
-                            value: Formatters.currency(monthIncome),
-                            icon: PhosphorIconsFill.arrowDown,
-                            iconColor: const Color(0xFF59A849),
-                            colorScheme: colorScheme,
-                            theme: theme,
+                          child: Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(Icons.arrow_downward, size: 16, color: colorScheme.primary),
+                                      const SizedBox(width: 8),
+                                      const Text('Income', style: TextStyle(fontSize: 10)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(Formatters.currencyCompact(monthIncome), style: theme.textTheme.titleLarge),
+                                ],
+                              ),
+                            ),
                           ),
                         ),
                       ],
-                    ).animate().fadeIn(delay: 50.ms, duration: 350.ms),
-
-                    const SizedBox(height: 20),
-
-                    // ── Animated Pie Chart ──
-                    AnimatedBuilder(
-                      animation: _pieAnimation,
-                      builder: (_, __) => Center(
-                        child: SizedBox(
-                          height: 180,
-                          child: PieChart(
+                    ),
+                    const SizedBox(height: 16),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _InsightChip(
+                            icon: momDiff <= 0 ? PhosphorIconsFill.trendDown : PhosphorIconsFill.trendUp,
+                            label: 'Trend vs Prev',
+                            value: '${momDiff > 0 ? '+' : ''}${momDiff.toStringAsFixed(1)}%',
+                            color: momDiff <= 0 ? Colors.green : Colors.orange,
+                          ),
+                          const SizedBox(width: 8),
+                          _InsightChip(
+                            icon: PhosphorIconsFill.lightning,
+                            label: 'Daily Average',
+                            value: Formatters.currencyCompact(dailyAvg),
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          _InsightChip(
+                            icon: PhosphorIconsFill.calendarBlank,
+                            label: 'Top Day',
+                            value: topDayName,
+                            color: colorScheme.secondary,
+                          ),
+                          const SizedBox(width: 8),
+                          _InsightChip(
+                            icon: PhosphorIconsFill.house,
+                            label: 'Lifestyle',
+                            value: weekendTotal > weekdayTotal ? 'Weekend' : 'Weekday',
+                            color: colorScheme.tertiary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 250,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          PieChart(
                             PieChartData(
-                              sectionsSpace: 2,
-                              centerSpaceRadius: 50,
+                              sectionsSpace: 4,
+                              centerSpaceRadius: 70,
                               pieTouchData: PieTouchData(
                                 touchCallback: (event, response) {
+                                  if (event is FlTapDownEvent || event is FlPanUpdateEvent) {
+                                    if (response?.touchedSection != null) {
+                                      final newIndex = response!.touchedSection!.touchedSectionIndex;
+                                      if (newIndex != _hoveredIndex && newIndex >= 0) {
+                                        HapticFeedback.lightImpact();
+                                      }
+                                    }
+                                  }
                                   setState(() {
                                     if (!event.isInterestedForInteractions ||
                                         response == null ||
-                                        response.touchedSection == null) {
+                                        response.touchedSection == null ||
+                                        response.touchedSection!.touchedSectionIndex < 0) {
                                       _hoveredIndex = null;
                                       return;
                                     }
-                                    _hoveredIndex = response
-                                        .touchedSection!.touchedSectionIndex;
+                                    _hoveredIndex = response.touchedSection!.touchedSectionIndex;
                                   });
                                 },
                               ),
@@ -260,142 +312,176 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                                 final i = entry.key;
                                 final slice = entry.value;
                                 final color = pieColors[i];
-                                final pct = totalExpense > 0
-                                    ? (slice.amount / totalExpense * 100)
-                                    : 0.0;
                                 final isTouched = _hoveredIndex == i;
 
                                 return PieChartSectionData(
-                                  value: slice.amount * _pieAnimation.value,
+                                  value: slice.amount,
                                   color: color,
-                                  radius: isTouched ? 45 : 35,
-                                  title: pct >= 6
-                                      ? '${pct.toStringAsFixed(0)}%'
-                                      : '',
-                                  titleStyle: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
+                                  radius: isTouched ? 30 : 25,
+                                  showTitle: false,
                                   badgeWidget: isTouched
-                                      ? _PieBadge(
-                                          color: color,
-                                          value: Formatters.currencyCompact(
-                                              slice.amount),
+                                      ? Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.surface,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: Colors.black.withValues(alpha: 0.1),
+                                                blurRadius: 4,
+                                                offset: const Offset(0, 2),
+                                              ),
+                                            ],
+                                          ),
+                                          child: Icon(
+                                            categoryMap[slice.categoryId]?.iconCodePoint != null
+                                                ? IconData(categoryMap[slice.categoryId]!.iconCodePoint,
+                                                    fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter')
+                                                : Icons.category,
+                                            size: 16,
+                                            color: color,
+                                          ),
                                         )
                                       : null,
-                                  badgePositionPercentageOffset: 1.2,
+                                  badgePositionPercentageOffset: .98,
                                 );
                               }).toList(),
                             ),
                           ),
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // ── Category breakdown with Cashew-style progress bars ──
-                    Text(
-                      'By Category',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    ...slices.asMap().entries.map((entry) {
-                      final i = entry.key;
-                      final slice = entry.value;
-                      final color = pieColors[i];
-                      final cat = categoryMap[slice.categoryId];
-                      final name = slice.categoryId == '_others'
-                          ? 'Others'
-                          : (cat?.name ?? 'Unknown');
-                      final pct = totalExpense > 0
-                          ? slice.amount / totalExpense
-                          : 0.0;
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _CategoryProgressRow(
-                          name: name,
-                          amount: slice.amount,
-                          percentage: pct,
-                          color: color,
-                          catIcon: cat != null
-                              ? IconData(cat.iconCodePoint,
-                                  fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                  fontPackage: 'phosphor_flutter')
-                              : PhosphorIconsFill.question,
-                          colorScheme: colorScheme,
-                          theme: theme,
-                          index: i,
-                        ),
-                      );
-                    }),
-
-                    const SizedBox(height: 24),
-
-                    // ── Key Metrics ──
-                    Text(
-                      'Key Metrics',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _MetricCard(
-                            icon: PhosphorIconsFill.chartBar,
-                            label: 'Daily Average',
-                            value: Formatters.currencyCompact(dailyAvg),
-                            colorScheme: colorScheme,
-                            theme: theme,
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _hoveredIndex != null
+                                    ? (slices[_hoveredIndex!].categoryId == '_others'
+                                        ? 'Others'
+                                        : (categoryMap[slices[_hoveredIndex!].categoryId]?.name ?? 'Unknown'))
+                                    : 'Total',
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                Formatters.currencyCompact(
+                                  _hoveredIndex != null ? slices[_hoveredIndex!].amount : totalExpense,
+                                ),
+                                style: theme.textTheme.headlineSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: _hoveredIndex != null ? pieColors[_hoveredIndex!] : colorScheme.onSurface,
+                                ),
+                              ),
+                              if (_hoveredIndex != null)
+                                Text(
+                                  '${(slices[_hoveredIndex!].amount / totalExpense * 100).toStringAsFixed(1)}%',
+                                  style: theme.textTheme.labelSmall?.copyWith(
+                                    color: pieColors[_hoveredIndex!],
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                            ],
                           ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricCard(
-                            icon: PhosphorIconsFill.flame,
-                            label: 'Highest Day',
-                            value: highestDay != null
-                                ? 'Day ${highestDay} — ${Formatters.currencyCompact(highestDayAmount)}'
-                                : '—',
-                            colorScheme: colorScheme,
-                            theme: theme,
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+
+                    // ── Category Breakdown ──
+                    Text('By Category', style: theme.textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    Card(
+                      child: Column(
+                        children: slices.asMap().entries.map((entry) {
+                          final i = entry.key;
+                          final slice = entry.value;
+                          final cat = categoryMap[slice.categoryId];
+                          final name = slice.categoryId == '_others' ? 'Others' : (cat?.name ?? 'Unknown');
+                          final pct = totalExpense > 0 ? slice.amount / totalExpense : 0.0;
+
+                          return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
+                            foregroundColor: colorScheme.primary,
+                            child: Icon(cat != null ? IconData(cat.iconCodePoint, fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter') : Icons.category),
+                          ),
+                            title: Text(name),
+                            subtitle: LinearProgressIndicator(
+                              value: pct,
+                              color: colorScheme.primary.withValues(alpha: 1.0 - (i / slices.length * 0.7)),
+                              backgroundColor: colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            trailing: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(Formatters.currencyCompact(slice.amount), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                Text('${(pct * 100).toStringAsFixed(0)}%', style: theme.textTheme.bodySmall),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // ── Heatmap (Spending Intensity) ──
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Activity Map', style: theme.textTheme.titleMedium),
+                        SegmentedButton<_HeatMapType>(
+                          segments: const [
+                            ButtonSegment(value: _HeatMapType.expense, label: Text('Expense', style: TextStyle(fontSize: 10))),
+                            ButtonSegment(value: _HeatMapType.income, label: Text('Income', style: TextStyle(fontSize: 10))),
+                          ],
+                          selected: {_heatmapType},
+                          onSelectionChanged: (val) => setState(() => _heatmapType = val.first),
+                          showSelectedIcon: false,
+                          style: SegmentedButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
                           ),
                         ),
                       ],
-                    ).animate().fadeIn(delay: 200.ms, duration: 350.ms),
+                    ),
                     const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _MetricCard(
-                            icon: PhosphorIconsFill.receipt,
-                            label: 'Transactions',
-                            value: '${monthExpenses.length}',
-                            colorScheme: colorScheme,
-                            theme: theme,
-                          ),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: HeatMap(
+                          datasets: heatmapData,
+                          colorMode: ColorMode.opacity,
+                          defaultColor: colorScheme.surfaceContainerHighest,
+                          textColor: colorScheme.onSurface,
+                          showColorTip: false,
+                          showText: false,
+                          scrollable: true,
+                          size: 20,
+                          startDate: DateTime.now().subtract(const Duration(days: 90)),
+                          endDate: DateTime.now(),
+                          colorsets: {
+                            1: colorScheme.primary,
+                          },
+                          onClick: (value) {
+                            final total = dailyTotals[value] ?? 0;
+                            HapticFeedback.selectionClick();
+                            ScaffoldMessenger.of(context).clearSnackBars();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                behavior: SnackBarBehavior.floating,
+                                width: 200,
+                                content: Text(
+                                  '${DateFormat('MMM d').format(value)}: ${Formatters.currencyCompact(total)}',
+                                  textAlign: TextAlign.center,
+                                ),
+                                duration: const Duration(seconds: 1),
+                              ),
+                            );
+                          },
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _MetricCard(
-                            icon: PhosphorIconsFill.tag,
-                            label: 'Categories Used',
-                            value: '${categoryTotals.length}',
-                            colorScheme: colorScheme,
-                            theme: theme,
-                          ),
-                        ),
-                      ],
-                    ).animate().fadeIn(delay: 240.ms, duration: 350.ms),
+                      ),
+                    ),
                   ],
-
                   const SizedBox(height: 100),
                 ],
               ),
@@ -407,292 +493,51 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
   }
 }
 
-// ── Month Selector ──
-class _MonthSelector extends StatelessWidget {
-  final DateTime month;
-  final VoidCallback onPrevious;
-  final VoidCallback? onNext;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-
-  const _MonthSelector({
-    required this.month,
-    required this.onPrevious,
-    required this.onNext,
-    required this.colorScheme,
-    required this.theme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: onPrevious,
-            icon: const Icon(Icons.chevron_left_rounded),
-            style: IconButton.styleFrom(
-              foregroundColor: colorScheme.onSurface,
-              padding: const EdgeInsets.all(8),
-            ),
-          ),
-          Text(
-            DateFormat('MMMM yyyy').format(month),
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          IconButton(
-            onPressed: onNext,
-            icon: Icon(
-              Icons.chevron_right_rounded,
-              color: onNext == null
-                  ? colorScheme.outlineVariant
-                  : colorScheme.onSurface,
-            ),
-            style: IconButton.styleFrom(padding: const EdgeInsets.all(8)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Category progress bar row ──
-class _CategoryProgressRow extends StatelessWidget {
-  final String name;
-  final double amount;
-  final double percentage;
-  final Color color;
-  final IconData catIcon;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-  final int index;
-
-  const _CategoryProgressRow({
-    required this.name,
-    required this.amount,
-    required this.percentage,
-    required this.color,
-    required this.catIcon,
-    required this.colorScheme,
-    required this.theme,
-    required this.index,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(catIcon, size: 18, color: color),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  name,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              Text(
-                Formatters.currency(amount),
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onSurface,
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                width: 38,
-                child: Text(
-                  '${(percentage * 100).toStringAsFixed(0)}%',
-                  textAlign: TextAlign.right,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colorScheme.outline,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          // Cashew-style full-width progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(6),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: percentage),
-              duration: Duration(milliseconds: 700 + index * 80),
-              curve: Curves.easeOutCubic,
-              builder: (_, value, __) => LinearProgressIndicator(
-                value: value,
-                minHeight: 5,
-                backgroundColor: colorScheme.surfaceContainerHighest,
-                valueColor: AlwaysStoppedAnimation<Color>(color),
-              ),
-            ),
-          ),
-        ],
-      ),
-    )
-        .animate(delay: (index * 60).ms)
-        .fadeIn(duration: 300.ms)
-        .slideY(begin: 0.05, end: 0);
-  }
-}
-
-// ── Mini stat card (income/expenses summary) ──
-class _MiniStatCard extends StatelessWidget {
-  final String label, value;
+class _InsightChip extends StatelessWidget {
   final IconData icon;
-  final Color iconColor;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-
-  const _MiniStatCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.iconColor,
-    required this.colorScheme,
-    required this.theme,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: iconColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 16, color: iconColor),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(label,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant)),
-              Text(value,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w700)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Pie tooltip badge ──
-class _PieBadge extends StatelessWidget {
-  final Color color;
+  final String label;
   final String value;
+  final Color color;
 
-  const _PieBadge({required this.color, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.9),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 6),
-        ],
-      ),
-      child: Text(
-        value,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-// ── Metric card ──
-class _MetricCard extends StatelessWidget {
-  final IconData icon;
-  final String label, value;
-  final ColorScheme colorScheme;
-  final ThemeData theme;
-
-  const _MetricCard({
+  const _InsightChip({
     required this.icon,
     required this.label,
     required this.value,
-    required this.colorScheme,
-    required this.theme,
+    required this.color,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      constraints: const BoxConstraints(minWidth: 110),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(16),
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: colorScheme.primaryContainer.withValues(alpha: 0.6),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, size: 18, color: colorScheme.primary),
-          ),
-          const SizedBox(height: 10),
+          Icon(icon, size: 18, color: color),
+          const SizedBox(height: 12),
           Text(
             label,
-            style: theme.textTheme.bodySmall?.copyWith(
+            style: theme.textTheme.labelSmall?.copyWith(
               color: colorScheme.onSurfaceVariant,
+              fontSize: 9,
             ),
           ),
           const SizedBox(height: 2),
           Text(
             value,
             style: theme.textTheme.titleSmall?.copyWith(
-              fontWeight: FontWeight.w700,
+              fontWeight: FontWeight.bold,
+              letterSpacing: -0.5,
             ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),

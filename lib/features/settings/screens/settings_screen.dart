@@ -23,7 +23,7 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar.large(
+          SliverAppBar.medium(
             title: const Text('Settings'),
             pinned: true,
             centerTitle: false,

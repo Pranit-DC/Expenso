@@ -45,7 +45,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar.large(
+          SliverAppBar.medium(
             title: const Text('History'),
             pinned: true,
             centerTitle: false,

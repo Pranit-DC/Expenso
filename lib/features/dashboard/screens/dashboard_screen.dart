@@ -109,7 +109,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar.large(
+          SliverAppBar.medium(
             title: Text(_getGreeting()),
             pinned: true,
             centerTitle: false,

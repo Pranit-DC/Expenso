@@ -17,7 +17,7 @@ class ThemeState {
   final ThemeMode themeMode;
 
   const ThemeState({
-    this.preset = AppThemePreset.emerald,
+    this.preset = AppThemePreset.sapphire,
     this.themeMode = ThemeMode.system,
   });
 
@@ -36,7 +36,7 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   ThemeNotifier() : super(const ThemeState()) {
     _box = Hive.box(_kThemeBox);
 
-    final presetIndex = _box.get(_kPresetKey, defaultValue: 0) as int;
+    final presetIndex = _box.get(_kPresetKey, defaultValue: AppThemePreset.sapphire.index) as int;
     final brightnessStr =
         _box.get(_kBrightnessKey, defaultValue: 'system') as String;
 

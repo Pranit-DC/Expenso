@@ -102,8 +102,33 @@ class SettingsScreen extends ConsumerWidget {
                     subtitle: 'Import from JSON backup',
                     colorScheme: colorScheme,
                     theme: theme,
-                    onTap: () async {
+                   onTap: () async {
                       HapticFeedback.mediumImpact();
+                      // Confirm before overwriting all data
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          title: const Text('Restore Data?'),
+                          content: const Text(
+                            'This will permanently replace all your current transactions, categories, and budget with the backup file. This cannot be undone.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.red.shade700,
+                              ),
+                              onPressed: () => Navigator.pop(ctx, true),
+                              child: const Text('Restore'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm != true) return;
+                      if (!context.mounted) return;
                       final success = await BackupService.restoreBackup();
                       if (context.mounted) {
                         _showSnack(context, success

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/models/transaction_model.dart';
@@ -15,6 +16,7 @@ import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/routing/app_router.dart';
 import '../../../core/widgets/tappable.dart';
 
 // ── Sliding filter enum ──
@@ -168,7 +170,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       ),
                       if (transactions.isNotEmpty)
                         TextButton(
-                          onPressed: () {},
+                          onPressed: () => context.go(AppRoutes.history),
                           child: const Text('See all'),
                         ),
                     ],
@@ -345,7 +347,7 @@ class _GreetingAppBar extends StatelessWidget {
       expandedHeight: 110,
       floating: true,
       snap: true,
-      pinned: false,
+      pinned: true,
       backgroundColor: colorScheme.surface,
       surfaceTintColor: Colors.transparent,
       flexibleSpace: FlexibleSpaceBar(
@@ -659,7 +661,7 @@ class _BudgetCard extends StatelessWidget {
                     style: theme.textTheme.titleSmall
                         ?.copyWith(fontWeight: FontWeight.w600)),
                 Text(
-                  '${(progress * 100).toStringAsFixed(0)}%',
+                  '${((progress * 100).clamp(0.0, 100.0)).toStringAsFixed(0)}%',
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                     color: isOver
@@ -676,7 +678,7 @@ class _BudgetCard extends StatelessWidget {
                 tween: Tween(begin: 0, end: progress.clamp(0.0, 1.0)),
                 duration: const Duration(milliseconds: 800),
                 curve: Curves.easeOutCubic,
-                builder: (_, value, __) => LinearProgressIndicator(
+                builder: (context, value, _) => LinearProgressIndicator(
                   value: value,
                   minHeight: 10,
                   backgroundColor: colorScheme.surfaceContainerHighest,

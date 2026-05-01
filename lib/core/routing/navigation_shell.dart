@@ -1,9 +1,7 @@
-// core/routing/navigation_shell.dart
-// The persistent bottom navigation bar shell — Cashew-style.
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'app_router.dart';
 
 class NavigationShell extends StatefulWidget {
@@ -15,7 +13,6 @@ class NavigationShell extends StatefulWidget {
 }
 
 class _NavigationShellState extends State<NavigationShell> {
-  int _previousIndex = 0;
 
   int _currentIndex(BuildContext context) {
     final location = GoRouterState.of(context).uri.path;
@@ -43,7 +40,7 @@ class _NavigationShellState extends State<NavigationShell> {
           'Add',
           style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
         ),
-        icon: const Icon(Icons.add_rounded, size: 22),
+        icon: const Icon(PhosphorIconsRegular.plus, size: 22),
         elevation: 3,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
@@ -86,7 +83,6 @@ class _NavigationShellState extends State<NavigationShell> {
           selectedIndex: currentIndex,
           onDestinationSelected: (index) {
             HapticFeedback.selectionClick();
-            setState(() => _previousIndex = currentIndex);
             context.go(destinations[index].path);
           },
           destinations: destinations

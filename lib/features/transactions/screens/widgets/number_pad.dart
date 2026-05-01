@@ -5,6 +5,7 @@ import '../../../../core/widgets/tappable.dart';
 class NumberPad extends StatelessWidget {
   final Function(String) onKeyPressed;
   final VoidCallback onBackspace;
+  final VoidCallback onClear;
   final VoidCallback onDone;
   final Color activeColor;
 
@@ -12,6 +13,7 @@ class NumberPad extends StatelessWidget {
     super.key,
     required this.onKeyPressed,
     required this.onBackspace,
+    required this.onClear,
     required this.onDone,
     required this.activeColor,
   });
@@ -61,9 +63,7 @@ class NumberPad extends StatelessWidget {
               _PadKey(
                 icon: PhosphorIconsRegular.backspace,
                 onTap: onBackspace,
-                onLongPress: () {
-                  // Additional functionality like clear all could go here
-                },
+                onLongPress: onClear,
                 colorScheme: colorScheme,
               ),
             ],

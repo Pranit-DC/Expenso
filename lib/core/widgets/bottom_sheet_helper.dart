@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Helper to show a Cashew-style bottom sheet with a unified rounded look and drag indicator.
+/// Helper to show a Cashew-style bottom sheet with a unified rounded look.
+/// The drag handle is rendered automatically via [BottomSheetThemeData.showDragHandle]
+/// set to true in [AppTheme] — no need to draw it manually here.
 class BottomSheetHelper {
   BottomSheetHelper._();
 
@@ -14,32 +16,14 @@ class BottomSheetHelper {
       context: context,
       isScrollControlled: isScrollControlled,
       useRootNavigator: true,
-      backgroundColor: backgroundColor ?? Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-      ),
+      backgroundColor: backgroundColor,
       builder: (ctx) {
         return SafeArea(
           child: Padding(
             padding: EdgeInsets.only(
               bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 12),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                child,
-              ],
-            ),
+            child: child,
           ),
         );
       },

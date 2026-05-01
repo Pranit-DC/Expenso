@@ -42,9 +42,7 @@ class AppTheme {
       brightness: brightness,
 
       // --- Expressive Surface Tints ---
-      scaffoldBackgroundColor: isDark
-          ? colorScheme.surface
-          : colorScheme.surface,
+      scaffoldBackgroundColor: colorScheme.surface,
 
       // --- AppBar ---
       appBarTheme: AppBarTheme(

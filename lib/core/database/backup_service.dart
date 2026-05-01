@@ -40,11 +40,17 @@ class BackupService {
         final file = File('${directory.path}/expenso_backup_${DateTime.now().millisecondsSinceEpoch}.json');
         await file.writeAsString(jsonStr);
 
-        final result = await Share.shareXFiles(
-          [XFile(file.path)],
-          subject: 'Expenso Backup',
-        );
-        return result.status == ShareResultStatus.success;
+        try {
+          final result = await Share.shareXFiles(
+            [XFile(file.path)],
+            subject: 'Expenso Backup',
+          );
+          return result.status == ShareResultStatus.success ||
+              result.status == ShareResultStatus.dismissed;
+        } finally {
+          // Always clean up the temp file regardless of share outcome
+          if (await file.exists()) await file.delete();
+        }
       }
     } catch (e) {
       debugPrint('Backup Error: $e');

@@ -46,8 +46,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         return t.type == TransactionType.income;
       }
       return true;
-    }).toList()
-      ..sort((a, b) => b.date.compareTo(a.date));
+    }).toList();
 
     // Group by date
     final grouped = <String, List<TransactionModel>>{};
@@ -164,7 +163,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               // Transaction tiles sliver
               yield SliverList.separated(
                 itemCount: dayTransactions.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 4),
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
                 itemBuilder: (context, index) {
                   final t = dayTransactions[index];
                   final cat = categoryMap[t.categoryId];
@@ -181,9 +180,27 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                         extra: t,
                       ),
                       onDelete: () {
+                        final deleted = t;
                         ref
                             .read(transactionProvider.notifier)
-                            .delete(t.id);
+                            .delete(deleted.id);
+                        ScaffoldMessenger.of(context)
+                          ..clearSnackBars()
+                          ..showSnackBar(
+                            SnackBar(
+                              content: const Text('Transaction deleted'),
+                              behavior: SnackBarBehavior.floating,
+                              margin: const EdgeInsets.fromLTRB(18, 0, 18, 20),
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12)),
+                              action: SnackBarAction(
+                                label: 'Undo',
+                                onPressed: () => ref
+                                    .read(transactionProvider.notifier)
+                                    .add(deleted),
+                              ),
+                            ),
+                          );
                       },
                     ),
                   );

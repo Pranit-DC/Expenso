@@ -21,31 +21,13 @@ class InsightsScreen extends ConsumerStatefulWidget {
   ConsumerState<InsightsScreen> createState() => _InsightsScreenState();
 }
 
-class _InsightsScreenState extends ConsumerState<InsightsScreen>
-    with SingleTickerProviderStateMixin {
+class _InsightsScreenState extends ConsumerState<InsightsScreen> {
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
   int? _hoveredIndex;
-  late AnimationController _pieController;
-  late Animation<double> _pieAnimation;
 
   @override
   void initState() {
     super.initState();
-    _pieController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
-    _pieAnimation = CurvedAnimation(
-      parent: _pieController,
-      curve: Curves.easeOutCubic,
-    );
-    _pieController.forward();
-  }
-
-  @override
-  void dispose() {
-    _pieController.dispose();
-    super.dispose();
   }
 
   void _changeMonth(int delta) {
@@ -54,7 +36,6 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
       _selectedMonth =
           DateTime(_selectedMonth.year, _selectedMonth.month + delta);
       _hoveredIndex = null;
-      _pieController.forward(from: 0);
     });
   }
 
@@ -233,65 +214,70 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                     const SizedBox(height: 20),
 
                     // ── Animated Pie Chart ──
-                    AnimatedBuilder(
-                      animation: _pieAnimation,
-                      builder: (_, __) => Center(
-                        child: SizedBox(
-                          height: 180,
-                          child: PieChart(
-                            PieChartData(
-                              sectionsSpace: 2,
-                              centerSpaceRadius: 50,
-                              pieTouchData: PieTouchData(
-                                touchCallback: (event, response) {
-                                  setState(() {
-                                    if (!event.isInterestedForInteractions ||
-                                        response == null ||
-                                        response.touchedSection == null) {
-                                      _hoveredIndex = null;
-                                      return;
-                                    }
-                                    _hoveredIndex = response
-                                        .touchedSection!.touchedSectionIndex;
-                                  });
-                                },
-                              ),
-                              sections: slices.asMap().entries.map((entry) {
-                                final i = entry.key;
-                                final slice = entry.value;
-                                final color = pieColors[i];
-                                final pct = totalExpense > 0
-                                    ? (slice.amount / totalExpense * 100)
-                                    : 0.0;
-                                final isTouched = _hoveredIndex == i;
-
-                                return PieChartSectionData(
-                                  value: slice.amount * _pieAnimation.value,
-                                  color: color,
-                                  radius: isTouched ? 45 : 35,
-                                  title: pct >= 6
-                                      ? '${pct.toStringAsFixed(0)}%'
-                                      : '',
-                                  titleStyle: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white,
-                                  ),
-                                  badgeWidget: isTouched
-                                      ? _PieBadge(
-                                          color: color,
-                                          value: Formatters.currencyCompact(
-                                              slice.amount),
-                                        )
-                                      : null,
-                                  badgePositionPercentageOffset: 1.2,
-                                );
-                              }).toList(),
+                    Center(
+                      child: SizedBox(
+                        height: 180,
+                        child: PieChart(
+                          PieChartData(
+                            sectionsSpace: 2,
+                            centerSpaceRadius: 50,
+                            pieTouchData: PieTouchData(
+                              touchCallback: (event, response) {
+                                setState(() {
+                                  if (!event.isInterestedForInteractions ||
+                                      response == null ||
+                                      response.touchedSection == null) {
+                                    _hoveredIndex = null;
+                                    return;
+                                  }
+                                  _hoveredIndex = response
+                                      .touchedSection!.touchedSectionIndex;
+                                });
+                              },
                             ),
+                            sections: slices.asMap().entries.map((entry) {
+                              final i = entry.key;
+                              final slice = entry.value;
+                              final color = pieColors[i];
+                              final pct = totalExpense > 0
+                                  ? (slice.amount / totalExpense * 100)
+                                  : 0.0;
+                              final isTouched = _hoveredIndex == i;
+
+                              return PieChartSectionData(
+                                value: slice.amount,
+                                color: color,
+                                radius: isTouched ? 45 : 35,
+                                title: pct >= 6
+                                    ? '${pct.toStringAsFixed(0)}%'
+                                    : '',
+                                titleStyle: const TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                                badgeWidget: isTouched
+                                    ? _PieBadge(
+                                        color: color,
+                                        value: Formatters.currencyCompact(
+                                            slice.amount),
+                                      )
+                                    : null,
+                                badgePositionPercentageOffset: 1.2,
+                              );
+                            }).toList(),
                           ),
                         ),
                       ),
-                    ),
+                    )
+                        .animate(key: ValueKey(_selectedMonth))
+                        .fadeIn(duration: 500.ms)
+                        .scale(
+                          begin: const Offset(0.85, 0.85),
+                          end: const Offset(1, 1),
+                          duration: 600.ms,
+                          curve: Curves.easeOutCubic,
+                        ),
 
                     const SizedBox(height: 24),
 
@@ -362,7 +348,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen>
                             icon: PhosphorIconsFill.flame,
                             label: 'Highest Day',
                             value: highestDay != null
-                                ? 'Day ${highestDay} — ${Formatters.currencyCompact(highestDayAmount)}'
+                                ? 'Day $highestDay — ${Formatters.currencyCompact(highestDayAmount)}'
                                 : '—',
                             colorScheme: colorScheme,
                             theme: theme,
@@ -544,7 +530,7 @@ class _CategoryProgressRow extends StatelessWidget {
               tween: Tween(begin: 0, end: percentage),
               duration: Duration(milliseconds: 700 + index * 80),
               curve: Curves.easeOutCubic,
-              builder: (_, value, __) => LinearProgressIndicator(
+              builder: (context, value, _) => LinearProgressIndicator(
                 value: value,
                 minHeight: 5,
                 backgroundColor: colorScheme.surfaceContainerHighest,

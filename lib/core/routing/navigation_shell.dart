@@ -25,11 +25,8 @@ class _NavigationShellState extends State<NavigationShell> {
   @override
   Widget build(BuildContext context) {
     final currentIndex = _currentIndex(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
     return Scaffold(
       body: widget.child,
-      // ── Extended FAB (Cashew-style add button) ──
       floatingActionButton: FloatingActionButton.extended(
         heroTag: 'add_transaction_fab',
         onPressed: () {
@@ -38,65 +35,27 @@ class _NavigationShellState extends State<NavigationShell> {
         },
         label: const Text(
           'Add',
-          style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+          style: TextStyle(fontWeight: FontWeight.w600),
         ),
-        icon: const Icon(PhosphorIconsRegular.plus, size: 22),
-        elevation: 3,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        icon: const Icon(PhosphorIconsRegular.plus),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-      // ── Bottom Nav with sharp shadow (Cashew boxShadowSharp) ──
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isDark ? 0.4 : 0.05),
-              blurRadius: 10,
-              offset: const Offset(0, -2),
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: NavigationBarTheme(
-          data: NavigationBarThemeData(
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            surfaceTintColor: Colors.transparent,
-            indicatorColor: Theme.of(context).colorScheme.primaryContainer,
-            labelTextStyle: WidgetStateProperty.resolveWith((states) {
-              if (states.contains(WidgetState.selected)) {
-                return const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.bold,
-                  overflow: TextOverflow.clip,
-                );
-              } else {
-                return const TextStyle(
-                  fontSize: 13,
-                  overflow: TextOverflow.clip,
-                );
-              }
-            }),
-            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-          ),
-          child: NavigationBar(
-          animationDuration: const Duration(milliseconds: 700),
-          selectedIndex: currentIndex,
-          onDestinationSelected: (index) {
-            HapticFeedback.selectionClick();
-            context.go(destinations[index].path);
-          },
-          destinations: destinations
-              .map(
-                (d) => NavigationDestination(
-                  icon: Icon(d.icon, size: 25),
-                  selectedIcon: Icon(d.selectedIcon, size: 25),
-                  label: d.label,
-                  tooltip: '',
-                ),
-              )
-              .toList(),
-        ),
-       ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (index) {
+          HapticFeedback.selectionClick();
+          context.go(destinations[index].path);
+        },
+        destinations: destinations
+            .map(
+              (d) => NavigationDestination(
+                icon: Icon(d.icon),
+                selectedIcon: Icon(d.selectedIcon),
+                label: d.label,
+                tooltip: '',
+              ),
+            )
+            .toList(),
       ),
     );
   }

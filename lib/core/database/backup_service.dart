@@ -11,6 +11,8 @@ import 'models/budget_model.dart';
 import 'models/category_model.dart';
 import 'models/transaction_model.dart';
 
+import 'package:universal_html/html.dart' as html;
+
 class BackupService {
   BackupService._();
 
@@ -31,8 +33,14 @@ class BackupService {
       final jsonStr = jsonEncode(backupData);
 
       if (kIsWeb) {
-        // On Web, use share mechanism (or standard HTML download but share_plus handles web downloads too)
-        await Share.share(jsonStr, subject: 'Expenso Backup');
+        // On Web, trigger a download
+        final bytes = utf8.encode(jsonStr);
+        final blob = html.Blob([bytes], 'application/json');
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        html.AnchorElement(href: url)
+          ..setAttribute('download', 'expenso_backup_${DateTime.now().millisecondsSinceEpoch}.json')
+          ..click();
+        html.Url.revokeObjectUrl(url);
         return true;
       } else {
         // On Mobile/Desktop
@@ -48,7 +56,6 @@ class BackupService {
           return result.status == ShareResultStatus.success ||
               result.status == ShareResultStatus.dismissed;
         } finally {
-          // Always clean up the temp file regardless of share outcome
           if (await file.exists()) await file.delete();
         }
       }

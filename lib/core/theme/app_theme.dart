@@ -31,7 +31,7 @@ class AppTheme {
       brightness: brightness,
     );
 
-    final textTheme = GoogleFonts.interTextTheme(
+    final textTheme = GoogleFonts.robotoTextTheme(
       isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
     );
 
@@ -61,42 +61,18 @@ class AppTheme {
       cardTheme: CardThemeData(
         elevation: 0,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(12),
         ),
         color: colorScheme.surfaceContainerLow,
-        surfaceTintColor: colorScheme.primary,
+        margin: EdgeInsets.zero,
       ),
 
       // --- Bottom Navigation ---
       navigationBarTheme: NavigationBarThemeData(
         elevation: 0,
-        height: 72,
-        indicatorColor: colorScheme.primaryContainer,
+        height: 80,
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        backgroundColor: isDark
-            ? colorScheme.surfaceContainer
-            : colorScheme.surfaceContainerLowest,
-        iconTheme: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) {
-            return IconThemeData(
-              color: colorScheme.onPrimaryContainer,
-              size: 24,
-            );
-          }
-          return IconThemeData(
-            color: colorScheme.onSurfaceVariant,
-            size: 24,
-          );
-        }),
-        labelTextStyle: WidgetStateProperty.resolveWith((states) {
-          final base = textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-          );
-          if (states.contains(WidgetState.selected)) {
-            return base?.copyWith(color: colorScheme.onSurface);
-          }
-          return base?.copyWith(color: colorScheme.onSurfaceVariant);
-        }),
+        backgroundColor: colorScheme.surfaceContainer,
       ),
 
       // --- FAB ---
@@ -105,7 +81,7 @@ class AppTheme {
         foregroundColor: colorScheme.onPrimaryContainer,
         elevation: 2,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
       ),
 
@@ -130,7 +106,7 @@ class AppTheme {
       // --- Chips ---
       chipTheme: ChipThemeData(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
         ),
       ),
 

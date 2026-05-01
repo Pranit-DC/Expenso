@@ -68,34 +68,50 @@ final GoRouter appRouter = GoRouter(
   initialLocation: AppRoutes.dashboard,
   routes: [
     // --- Shell Route for bottom nav ---
-    ShellRoute(
-      builder: (context, state, child) {
-        return NavigationShell(child: child);
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
+        return NavigationShell(navigationShell: navigationShell);
       },
-      routes: [
-        GoRoute(
-          path: AppRoutes.dashboard,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: DashboardScreen(),
-          ),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.dashboard,
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: DashboardScreen(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.history,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: HistoryScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.history,
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: HistoryScreen(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.insights,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: InsightsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.insights,
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: InsightsScreen(),
+              ),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.settings,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: SettingsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.settings,
+              pageBuilder: (context, state) => const NoTransitionPage(
+                child: SettingsScreen(),
+              ),
+            ),
+          ],
         ),
       ],
     ),

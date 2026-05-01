@@ -5,45 +5,57 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'app_router.dart';
 
 class NavigationShell extends StatefulWidget {
-  final Widget child;
-  const NavigationShell({super.key, required this.child});
+  final StatefulNavigationShell navigationShell;
+  const NavigationShell({super.key, required this.navigationShell});
 
   @override
   State<NavigationShell> createState() => _NavigationShellState();
 }
 
 class _NavigationShellState extends State<NavigationShell> {
-  int _currentIndex(BuildContext context) {
-    final location = GoRouterState.of(context).uri.path;
-    for (int i = 0; i < destinations.length; i++) {
-      if (location == destinations[i].path) return i;
-    }
-    return 0;
+  final List<int> _tabHistory = [];
+
+  void _trackTab(int index) {
+    if (_tabHistory.isNotEmpty && _tabHistory.last == index) return;
+    _tabHistory.remove(index);
+    _tabHistory.add(index);
   }
 
-  Future<bool> _handleSystemBack(BuildContext context) async {
+  void _handleSystemBack() {
     final router = GoRouter.of(context);
     if (router.canPop()) {
       router.pop();
-      return false;
+      return;
     }
 
-    final currentIndex = _currentIndex(context);
+    if (_tabHistory.length > 1) {
+      _tabHistory.removeLast();
+      final previousIndex = _tabHistory.last;
+      widget.navigationShell.goBranch(previousIndex, initialLocation: false);
+      return;
+    }
+
+    final currentIndex = widget.navigationShell.currentIndex;
     if (currentIndex != 0) {
-      context.go(AppRoutes.dashboard);
-      return false;
+      widget.navigationShell.goBranch(0, initialLocation: false);
+      _trackTab(0);
+      return;
     }
 
-    return true;
+    SystemNavigator.pop();
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentIndex = _currentIndex(context);
-    return WillPopScope(
-      onWillPop: () => _handleSystemBack(context),
+    final currentIndex = widget.navigationShell.currentIndex;
+    _trackTab(currentIndex);
+    return BackButtonListener(
+      onBackButtonPressed: () async {
+        _handleSystemBack();
+        return true;
+      },
       child: Scaffold(
-        body: widget.child,
+        body: widget.navigationShell,
         floatingActionButton: FloatingActionButton.extended(
           heroTag: 'add_transaction_fab',
           onPressed: () {
@@ -61,7 +73,8 @@ class _NavigationShellState extends State<NavigationShell> {
           selectedIndex: currentIndex,
           onDestinationSelected: (index) {
             HapticFeedback.selectionClick();
-            context.go(destinations[index].path);
+            _trackTab(index);
+            widget.navigationShell.goBranch(index, initialLocation: false);
           },
           destinations: destinations
               .map(

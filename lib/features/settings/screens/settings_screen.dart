@@ -7,6 +7,9 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/database/backup_service.dart';
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/database/repositories/transaction_repository.dart';
+import '../../../core/database/repositories/category_repository.dart';
+import '../../../core/database/repositories/budget_repository.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -70,7 +73,7 @@ class SettingsScreen extends ConsumerWidget {
                       title: 'Restore Data',
                       subtitle: 'Import from JSON backup',
                       colorScheme: colorScheme,
-                      onTap: () => _handleRestore(context, colorScheme),
+                      onTap: () => _handleRestore(context, ref, colorScheme),
                     ),
                   ],
                   theme,
@@ -202,7 +205,7 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _handleRestore(BuildContext context, ColorScheme colorScheme) async {
+  Future<void> _handleRestore(BuildContext context, WidgetRef ref, ColorScheme colorScheme) async {
     HapticFeedback.mediumImpact();
     final confirm = await showDialog<bool>(
       context: context,
@@ -224,6 +227,13 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (confirm != true) return;
     final success = await BackupService.restoreBackup();
+    if (success) {
+      // Force refresh all providers to show restored data
+      ref.invalidate(transactionProvider);
+      ref.invalidate(categoryProvider);
+      ref.invalidate(budgetProvider);
+    }
+
     if (context.mounted) {
       _showSnack(context, success ? 'Data restored successfully' : 'Restore failed', success);
     }

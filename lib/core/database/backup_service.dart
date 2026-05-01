@@ -70,6 +70,7 @@ class BackupService {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        withData: true, // Required for web to get bytes
       );
 
       if (result == null) return false;

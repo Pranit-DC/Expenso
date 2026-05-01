@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:go_router/go_router.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
@@ -42,30 +43,47 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('History'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(64),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: SegmentedButton<TransactionType?>(
-              segments: const [
-                ButtonSegment(value: null, label: Text('All')),
-                ButtonSegment(value: TransactionType.expense, label: Text('Expense')),
-                ButtonSegment(value: TransactionType.income, label: Text('Income')),
-              ],
-              selected: {_filter},
-              onSelectionChanged: (Set<TransactionType?> newSelection) {
-                setState(() {
-                  _filter = newSelection.first;
-                });
-              },
-            ),
-          ),
-        ),
-      ),
       body: CustomScrollView(
         slivers: [
+          SliverAppBar.large(
+            title: const Text('History'),
+            pinned: true,
+            centerTitle: false,
+            bottom: PreferredSize(
+              preferredSize: const Size.fromHeight(64),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                child: SegmentedButton<TransactionType?>(
+                  showSelectedIcon: false,
+                  style: SegmentedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    selectedBackgroundColor: colorScheme.primary,
+                    selectedForegroundColor: colorScheme.onPrimary,
+                  ),
+                  segments: const [
+                    ButtonSegment(
+                      value: null,
+                      label: Text('All', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    ButtonSegment(
+                      value: TransactionType.expense,
+                      label: Text('Expense', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                    ButtonSegment(
+                      value: TransactionType.income,
+                      label: Text('Income', style: TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                  selected: {_filter},
+                  onSelectionChanged: (Set<TransactionType?> newSelection) {
+                    setState(() {
+                      _filter = newSelection.first;
+                    });
+                  },
+                ),
+              ),
+            ),
+          ),
           
           if (filtered.isEmpty)
             SliverFillRemaining(
@@ -88,95 +106,131 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               });
               final isPositiveDay = dayNet >= 0;
 
-              return SliverMainAxisGroup(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            dateKey,
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.primary,
-                            ),
-                          ),
-                          Text(
-                            '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayNet)}',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              color: isPositiveDay ? colorScheme.primary : colorScheme.error,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  SliverList.builder(
-                    itemCount: dayTransactions.length,
-                    itemBuilder: (context, index) {
-                      final t = dayTransactions[index];
-                      final cat = categoryMap[t.categoryId];
-                      final isExpense = t.type == TransactionType.expense;
-                      
-                      return Slidable(
-                        key: ValueKey(t.id),
-                        endActionPane: ActionPane(
-                          motion: const BehindMotion(),
-                          extentRatio: 0.25,
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                sliver: SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            SlidableAction(
-                              onPressed: (_) {
-                                ref.read(transactionProvider.notifier).delete(t.id);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: const Text('Transaction deleted'),
-                                    action: SnackBarAction(
-                                      label: 'Undo',
-                                      onPressed: () => ref.read(transactionProvider.notifier).add(t),
-                                    ),
-                                  ),
-                                );
-                              },
-                              backgroundColor: colorScheme.error,
-                              foregroundColor: colorScheme.onError,
-                              icon: Icons.delete,
-                              label: 'Delete',
+                            Text(
+                              dateKey.toUpperCase(),
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.5,
+                                fontSize: 11,
+                              ),
+                            ),
+                            Text(
+                              '${isPositiveDay ? '+' : ''}${Formatters.currencyCompact(dayNet)}',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: isPositiveDay ? colorScheme.primary : colorScheme.error,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ],
                         ),
-                        child: ListTile(
-                          onTap: () => context.push(AppRoutes.addTransaction, extra: t),
-                          leading: CircleAvatar(
-                            backgroundColor: cat != null
-                                ? Color(int.parse('FF${cat.colorHex}', radix: 16)).withValues(alpha: 0.2)
-                                : colorScheme.surfaceContainerHighest,
-                            foregroundColor: cat != null
-                                ? Color(int.parse('FF${cat.colorHex}', radix: 16))
-                                : colorScheme.onSurfaceVariant,
-                            child: Icon(
-                              cat != null
-                                  ? IconData(cat.iconCodePoint,
-                                      fontFamily: 'Phosphor',
-                                      fontPackage: 'phosphor_flutter')
-                                  : Icons.receipt,
-                            ),
-                          ),
-                          title: Text(cat?.name ?? 'Unknown'),
-                          subtitle: t.note != null && t.note!.isNotEmpty ? Text(t.note!) : null,
-                          trailing: Text(
-                            '${isExpense ? '−' : '+'}${Formatters.currency(t.amount)}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: isExpense ? colorScheme.error : colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                      ),
+                    ),
+                    SliverToBoxAdapter(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: List.generate(dayTransactions.length, (index) {
+                            final t = dayTransactions[index];
+                            final cat = categoryMap[t.categoryId];
+                            final isExpense = t.type == TransactionType.expense;
+
+                            return Column(
+                              children: [
+                                Slidable(
+                                  key: ValueKey(t.id),
+                                  endActionPane: ActionPane(
+                                    motion: const BehindMotion(),
+                                    extentRatio: 0.25,
+                                    children: [
+                                      SlidableAction(
+                                        onPressed: (_) {
+                                          ref.read(transactionProvider.notifier).delete(t.id);
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                              content: const Text('Transaction deleted'),
+                                              action: SnackBarAction(
+                                                label: 'Undo',
+                                                onPressed: () => ref.read(transactionProvider.notifier).add(t),
+                                              ),
+                                            ),
+                                          );
+                                        },
+                                        backgroundColor: colorScheme.error,
+                                        foregroundColor: colorScheme.onError,
+                                        icon: PhosphorIconsBold.trash,
+                                        label: 'Delete',
+                                      ),
+                                    ],
+                                  ),
+                                  child: ListTile(
+                                    onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                    leading: Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: cat != null
+                                            ? Color(int.parse('FF${cat.colorHex}', radix: 16)).withValues(alpha: 0.15)
+                                            : colorScheme.surfaceContainerHighest,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Icon(
+                                        cat != null
+                                            ? IconData(cat.iconCodePoint,
+                                                fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
+                                                fontPackage: 'phosphor_flutter')
+                                            : PhosphorIconsFill.receipt,
+                                        color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    title: Text(
+                                      cat?.name ?? 'Unknown',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                    ),
+                                    subtitle: t.note != null && t.note!.isNotEmpty
+                                        ? Text(t.note!, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13))
+                                        : null,
+                                    trailing: Text(
+                                      '${isExpense ? '−' : '+'}${Formatters.currencyCompact(t.amount)}',
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        color: isExpense ? colorScheme.error : colorScheme.primary,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: -0.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                if (index < dayTransactions.length - 1)
+                                  Divider(
+                                    height: 1,
+                                    indent: 72,
+                                    endIndent: 20,
+                                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                                  ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }),
 

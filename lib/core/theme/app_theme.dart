@@ -10,7 +10,11 @@ enum AppThemePreset {
   sapphire('Sapphire', Color(0xFF1565C0), Color(0xFF0D47A1)),
   amethyst('Amethyst', Color(0xFF7B1FA2), Color(0xFF6A1B9A)),
   amber('Amber', Color(0xFFE65100), Color(0xFFBF360C)),
-  onyx('Onyx', Color(0xFF37474F), Color(0xFF263238));
+  onyx('Onyx', Color(0xFF37474F), Color(0xFF263238)),
+  ruby('Ruby', Color(0xFFC62828), Color(0xFFB71C1C)),
+  gold('Gold', Color(0xFFFBC02D), Color(0xFFF9A825)),
+  indigo('Indigo', Color(0xFF3F51B5), Color(0xFF303F9F)),
+  rose('Rose', Color(0xFFEC407A), Color(0xFFD81B60));
 
   const AppThemePreset(this.label, this.seedColor, this.seedColorDark);
   final String label;
@@ -31,8 +35,20 @@ class AppTheme {
       brightness: brightness,
     );
 
-    final textTheme = GoogleFonts.robotoTextTheme(
-      isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme,
+    final baseTextTheme = isDark ? ThemeData.dark().textTheme : ThemeData.light().textTheme;
+    final textTheme = GoogleFonts.robotoTextTheme(baseTextTheme).copyWith(
+      headlineMedium: baseTextTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.w900,
+        fontSize: 48,
+        color: colorScheme.onSurface,
+        letterSpacing: -1.5,
+      ),
+      titleLarge: baseTextTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.w900,
+        fontSize: 28,
+        color: colorScheme.onSurface,
+        letterSpacing: -0.5,
+      ),
     );
 
     return ThemeData(
@@ -46,15 +62,11 @@ class AppTheme {
 
       // --- AppBar ---
       appBarTheme: AppBarTheme(
-        centerTitle: true,
+        centerTitle: false,
         elevation: 0,
-        scrolledUnderElevation: 2,
-        backgroundColor: Colors.transparent,
-        foregroundColor: colorScheme.onSurface,
-        titleTextStyle: textTheme.titleLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          color: colorScheme.onSurface,
-        ),
+        scrolledUnderElevation: 3,
+        surfaceTintColor: colorScheme.surfaceTint,
+        titleTextStyle: textTheme.titleLarge,
       ),
 
       // --- Cards ---

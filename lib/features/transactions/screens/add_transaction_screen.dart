@@ -10,6 +10,7 @@ import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/models/category_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
+import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/widgets/bottom_sheet_helper.dart';
@@ -147,10 +148,39 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 crossAxisSpacing: 16,
                 childAspectRatio: 0.8,
               ),
-              itemCount: categories.length,
+              itemCount: categories.length + 1,
               itemBuilder: (ctx, idx) {
+                if (idx == categories.length) {
+                  return InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      _showAddCategorySheet();
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(Icons.add),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          'Add New',
+                          style: TextStyle(fontSize: 10),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 final cat = categories[idx];
-                final catColor = Color(int.parse('FF${cat.colorHex}', radix: 16));
                 final isSelected = _selectedCategoryId == cat.id;
                 return InkWell(
                   onTap: () {
@@ -166,8 +196,8 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                         height: 48,
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? catColor
-                              : Theme.of(context).colorScheme.surfaceContainerHighest,
+                              ? Theme.of(context).colorScheme.primary
+                              : Color(int.parse('FF${cat.colorHex}', radix: 16)).withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
@@ -176,7 +206,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                               fontPackage: 'phosphor_flutter'),
                           color: isSelected
                               ? Theme.of(context).colorScheme.onPrimary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                              : Color(int.parse('FF${cat.colorHex}', radix: 16)),
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -201,11 +231,70 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
     );
   }
 
+  void _showAddCategorySheet() {
+    final controller = TextEditingController();
+    final theme = Theme.of(context);
+
+    BottomSheetHelper.openBottomSheet(
+      context: context,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(24, 8, 24, MediaQuery.of(context).viewInsets.bottom + 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Add Custom Category',
+              style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Category Name',
+                hintText: 'e.g. Subscriptions',
+                prefixIcon: Icon(Icons.label_outline),
+              ),
+              onSubmitted: (_) => _createCategory(controller.text.trim()),
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: () => _createCategory(controller.text.trim()),
+              child: const Text('Add Category'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _createCategory(String name) {
+    if (name.isEmpty) return;
+
+    final newCat = CategoryModel(
+      id: const Uuid().v4(),
+      name: name,
+      iconCodePoint: PhosphorIconsFill.tag.codePoint,
+      colorHex: Theme.of(context).colorScheme.primary.toARGB32().toRadixString(16).substring(2).toUpperCase(),
+      type: _type == TransactionType.expense ? 0 : 1,
+      isDefault: false,
+    );
+
+    ref.read(categoryProvider.notifier).add(newCat);
+    setState(() => _selectedCategoryId = newCat.id);
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final categories = ref.watch(categoryProvider);
+    final budget = ref.watch(budgetProvider);
+    final transactions = ref.watch(transactionProvider);
 
     final filteredCategories = categories
         .where((c) => c.type == (_type == TransactionType.expense ? 0 : 1) || c.type == 2)
@@ -214,9 +303,17 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         .where((c) => c.id == _selectedCategoryId)
         .firstOrNull;
 
-    final bool hasAmount = _amountStr.isNotEmpty && double.tryParse(_amountStr) != null
-            ? double.parse(_amountStr) > 0
-            : false;
+    final now = DateTime.now();
+    final monthSpent = transactions
+        .where((t) =>
+            t.type == TransactionType.expense &&
+            t.date.year == now.year &&
+            t.date.month == now.month &&
+            t.id != widget.existingTransaction?.id)
+        .fold(0.0, (s, t) => s + t.amount);
+
+    final currentInput = double.tryParse(_amountStr) ?? 0.0;
+    final bool hasAmount = _amountStr.isNotEmpty && currentInput > 0;
     final bool canSave = hasAmount && _selectedCategoryId != null;
 
     return Scaffold(
@@ -224,35 +321,24 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
         title: Text(_isEditing ? 'Edit Transaction' : 'Add Transaction'),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // ── Segmented Type Button ──
-            SegmentedButton<TransactionType>(
-              segments: const [
-                ButtonSegment(
-                  value: TransactionType.expense,
-                  label: Text('Expense'),
-                  icon: Icon(Icons.arrow_downward),
-                ),
-                ButtonSegment(
-                  value: TransactionType.income,
-                  label: Text('Income'),
-                  icon: Icon(Icons.arrow_upward),
-                ),
-              ],
-              selected: {_type},
-              onSelectionChanged: (Set<TransactionType> newSelection) {
-                setState(() {
-                  _type = newSelection.first;
-                  _selectedCategoryId = null;
-                });
-              },
+            // ── Note Field (Moved Up) ──
+            TextField(
+              controller: _noteController,
+              maxLines: 2,
+              minLines: 1,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Note (optional)',
+                prefixIcon: Icon(Icons.notes),
+              ),
             ),
             const SizedBox(height: 32),
 
-            // ── Amount Input (Minimal) ──
+            // ── Amount Input ──
             InkWell(
               onTap: () => _showNumberPad(colorScheme.primary),
               borderRadius: BorderRadius.circular(16),
@@ -283,6 +369,38 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // ── Segmented Type Button ──
+            SegmentedButton<TransactionType>(
+              segments: const [
+                ButtonSegment(
+                  value: TransactionType.expense,
+                  label: Text('Expense'),
+                  icon: Icon(Icons.arrow_downward),
+                ),
+                ButtonSegment(
+                  value: TransactionType.income,
+                  label: Text('Income'),
+                  icon: Icon(Icons.arrow_upward),
+                ),
+              ],
+              selected: {_type},
+              onSelectionChanged: (Set<TransactionType> newSelection) {
+                setState(() {
+                  _type = newSelection.first;
+                  _selectedCategoryId = null;
+                });
+              },
+            ),
+            const SizedBox(height: 24),
+
+            // ── Budget Impact (Non-interactive, moved up for reachability) ──
+            _BudgetImpact(
+              limit: budget.monthlyLimit,
+              spent: monthSpent,
+              currentInput: currentInput,
+              isExpense: _type == TransactionType.expense,
+            ),
 
             // ── Category Selector ──
             ListTile(
@@ -328,32 +446,22 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
               subtitle: Text(DateFormat('EEEE, d MMMM yyyy').format(_selectedDate)),
               trailing: const Icon(Icons.chevron_right),
             ),
-            const SizedBox(height: 16),
-
-            // ── Note Field ──
-            TextField(
-              controller: _noteController,
-              maxLines: 2,
-              minLines: 1,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Note (optional)',
-                prefixIcon: Icon(Icons.notes),
-              ),
-            ),
-            const SizedBox(height: 48),
-
-            // ── Save Button ──
-            FilledButton.icon(
-              onPressed: canSave ? _saveTransaction : null,
-              icon: const Icon(Icons.save),
-              label: Text(_isEditing ? 'Update Transaction' : 'Save Transaction'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.all(16),
-                textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+          child: FilledButton.icon(
+            onPressed: canSave ? _saveTransaction : null,
+            icon: const Icon(Icons.check_rounded),
+            label: Text(_isEditing ? 'Update Transaction' : 'Save Transaction'),
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(64),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+          ),
         ),
       ),
     );
@@ -381,5 +489,115 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
       ref.read(transactionProvider.notifier).add(transaction);
     }
     Navigator.of(context).pop();
+  }
+}
+
+class _BudgetImpact extends StatelessWidget {
+  final double limit;
+  final double spent;
+  final double currentInput;
+  final bool isExpense;
+
+  const _BudgetImpact({
+    required this.limit,
+    required this.spent,
+    required this.currentInput,
+    required this.isExpense,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (limit <= 0 || !isExpense) return const SizedBox.shrink();
+
+    final totalNew = spent + currentInput;
+    final progress = (totalNew / limit).clamp(0.0, 1.0);
+    final isOver = totalNew > limit;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final color = isOver
+        ? colorScheme.error
+        : (progress > 0.8 ? Colors.orange : colorScheme.primary);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: color.withValues(alpha: 0.1)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isOver ? PhosphorIconsFill.warning : PhosphorIconsFill.chartPieSlice,
+                  size: 16,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isOver ? 'Budget Exceeded' : 'Monthly Budget Impact',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: isOver ? colorScheme.error : colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      isOver 
+                        ? 'Over by ${Formatters.currencyCompact(totalNew - limit)}'
+                        : '${Formatters.currencyCompact(limit - totalNew)} remaining',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: color.withValues(alpha: 0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    Formatters.currencyCompact(totalNew),
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    '${(progress * 100).toInt()}% of limit',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              color: color,
+              minHeight: 8,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

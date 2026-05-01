@@ -7,12 +7,16 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/database/models/transaction_model.dart';
+import '../../../core/database/models/category_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/utils/color_utils.dart';
 import '../../../core/routing/app_router.dart';
+import 'package:flutter/services.dart';
+import '../../transactions/screens/widgets/number_pad.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -23,6 +27,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   TransactionType? _filter;
+  bool _isAllTime = true;
 
   String _getGreeting() {
     final hour = DateTime.now().hour;
@@ -52,7 +57,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         .where((t) => t.type == TransactionType.expense)
         .fold(0.0, (sum, t) => sum + t.amount);
 
-    final balance = totalIncome - totalExpense;
+    final allTimeIncome = transactions
+        .where((t) => t.type == TransactionType.income)
+        .fold(0.0, (sum, t) => sum + t.amount);
+
+    final allTimeExpense = transactions
+        .where((t) => t.type == TransactionType.expense)
+        .fold(0.0, (sum, t) => sum + t.amount);
+
+    final currentIncome = _isAllTime ? allTimeIncome : totalIncome;
+    final currentExpense = _isAllTime ? allTimeExpense : totalExpense;
+    final balance = currentIncome - currentExpense;
     final budgetLimit = budget.monthlyLimit;
     final budgetProgress =
         budgetLimit > 0 ? (totalExpense / budgetLimit).clamp(0.0, 1.5) : 0.0;
@@ -60,13 +75,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final last7Days = List.generate(7, (i) {
       final day = DateTime(now.year, now.month, now.day)
           .subtract(Duration(days: 6 - i));
-      final dayExpenses = transactions.where((t) {
+      
+      final categoryAmounts = <String, double>{};
+      final dayTransactions = transactions.where((t) {
         return t.type == TransactionType.expense &&
             t.date.year == day.year &&
             t.date.month == day.month &&
             t.date.day == day.day;
-      }).fold(0.0, (sum, t) => sum + t.amount);
-      return _DaySpending(day: day, amount: dayExpenses);
+      });
+
+      double total = 0;
+      for (final t in dayTransactions) {
+        categoryAmounts.update(t.categoryId, (v) => v + t.amount, ifAbsent: () => t.amount);
+        total += t.amount;
+      }
+
+      return _DaySpending(day: day, categoryAmounts: categoryAmounts, total: total);
     });
 
     final filteredTransactions = transactions.where((t) {
@@ -83,11 +107,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final categoryMap = {for (var c in categories) c.id: c};
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(_getGreeting()),
-      ),
       body: CustomScrollView(
         slivers: [
+          SliverAppBar.large(
+            title: Text(_getGreeting()),
+            pinned: true,
+            centerTitle: false,
+          ),
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -102,11 +128,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            'Total Balance',
-                            style: theme.textTheme.labelLarge?.copyWith(
-                              color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                _isAllTime ? 'Total Balance' : 'Monthly Balance',
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8),
+                                ),
+                              ),
+                              SegmentedButton<bool>(
+                                segments: const [
+                                  ButtonSegment(value: false, label: Text('Month', style: TextStyle(fontSize: 10))),
+                                  ButtonSegment(value: true, label: Text('All', style: TextStyle(fontSize: 10))),
+                                ],
+                                selected: {_isAllTime},
+                                onSelectionChanged: (val) {
+                                  setState(() => _isAllTime = val.first);
+                                },
+                                showSelectedIcon: false,
+                                style: SegmentedButton.styleFrom(
+                                  visualDensity: VisualDensity.compact,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  backgroundColor: colorScheme.primaryContainer,
+                                  selectedBackgroundColor: colorScheme.onPrimaryContainer.withValues(alpha: 0.1),
+                                  selectedForegroundColor: colorScheme.onPrimaryContainer,
+                                  foregroundColor: colorScheme.onPrimaryContainer.withValues(alpha: 0.6),
+                                  side: BorderSide(color: colorScheme.onPrimaryContainer.withValues(alpha: 0.1)),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 8),
                           Text(
@@ -122,14 +173,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                               _BalanceMini(
                                 icon: Icons.arrow_downward,
                                 label: 'Income',
-                                amount: Formatters.currencyCompact(totalIncome),
+                                amount: Formatters.currencyCompact(currentIncome),
                                 colorScheme: colorScheme,
                               ),
                               const SizedBox(width: 32),
                               _BalanceMini(
                                 icon: Icons.arrow_upward,
                                 label: 'Expense',
-                                amount: Formatters.currencyCompact(totalExpense),
+                                amount: Formatters.currencyCompact(currentExpense),
                                 colorScheme: colorScheme,
                               ),
                             ],
@@ -139,14 +190,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // ── Budget Progress ──
-                  Card(
-                    child: InkWell(
-                      onTap: () => _showBudgetDialog(context, ref, budgetLimit),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                       borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: InkWell(
+                      onTap: () => _showBudgetSheet(context, ref, budgetLimit),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(20),
                         child: limitUI(budgetLimit, totalExpense, budgetProgress, theme, colorScheme),
                       ),
                     ),
@@ -154,41 +208,81 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   const SizedBox(height: 24),
 
                   // ── Weekly Chart ──
-                  Text(
-                    'Last 7 Days',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _WeeklyChart(
-                        data: last7Days,
-                        colorScheme: colorScheme,
-                        theme: theme,
-                      ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      children: [
+                        Icon(PhosphorIconsFill.chartBar, size: 18, color: colorScheme.primary),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Spending Insights',
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  Container(
+                    height: 240,
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                    ),
+                    child: _WeeklyChart(
+                      data: last7Days,
+                      categoryMap: categoryMap,
+                      colorScheme: colorScheme,
+                      theme: theme,
+                    ),
+                  ),
+                  const SizedBox(height: 32),
 
                   // ── Recent Transactions ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Recent Transactions', style: theme.textTheme.titleMedium),
-                      if (transactions.isNotEmpty)
-                        TextButton(
-                          onPressed: () => context.go(AppRoutes.history),
-                          child: const Text('See all'),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(PhosphorIconsFill.clockCounterClockwise, size: 18, color: colorScheme.primary),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Recent Activity',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1.2,
+                              ),
+                            ),
+                          ],
                         ),
-                    ],
+                        if (transactions.isNotEmpty)
+                          TextButton(
+                            onPressed: () => context.go(AppRoutes.history),
+                            child: const Text('See all'),
+                          ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 12),
                   SegmentedButton<TransactionType?>(
+                    showSelectedIcon: false,
+                    style: SegmentedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      selectedBackgroundColor: colorScheme.primary,
+                      selectedForegroundColor: colorScheme.onPrimary,
+                    ),
                     segments: const [
-                      ButtonSegment(value: null, label: Text('All')),
-                      ButtonSegment(value: TransactionType.expense, label: Text('Expense')),
-                      ButtonSegment(value: TransactionType.income, label: Text('Income')),
+                      ButtonSegment(value: null, label: Text('All', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                      ButtonSegment(value: TransactionType.expense, label: Text('Expense', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
+                      ButtonSegment(value: TransactionType.income, label: Text('Income', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold))),
                     ],
                     selected: {_filter},
                     onSelectionChanged: (Set<TransactionType?> newSelection) {
@@ -217,59 +311,92 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             )
           else
             ...grouped.entries.map((entry) {
-              return SliverMainAxisGroup(
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                      child: Text(
-                        entry.key,
-                        style: theme.textTheme.labelLarge?.copyWith(
-                          color: colorScheme.primary,
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                sliver: SliverMainAxisGroup(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                        child: Text(
+                          entry.key.toUpperCase(),
+                          style: theme.textTheme.labelMedium?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1.5,
+                            fontSize: 10,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  SliverList.builder(
-                    itemCount: entry.value.length,
-                    itemBuilder: (context, index) {
-                      final t = entry.value[index];
-                      final cat = categoryMap[t.categoryId];
-                      final isExpense = t.type == TransactionType.expense;
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                        child: ListTile(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          tileColor: colorScheme.surfaceContainerLow,
-                          leading: CircleAvatar(
-                            backgroundColor: cat != null
-                                ? Color(int.parse('FF${cat.colorHex}', radix: 16)).withValues(alpha: 0.2)
-                                : colorScheme.surfaceContainerHighest,
-                            foregroundColor: cat != null
-                                ? Color(int.parse('FF${cat.colorHex}', radix: 16))
-                                : colorScheme.onSurfaceVariant,
-                            child: Icon(
-                              cat != null
-                                  ? IconData(cat.iconCodePoint,
-                                      fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                      fontPackage: 'phosphor_flutter')
-                                  : Icons.receipt,
-                            ),
-                          ),
-                          title: Text(cat?.name ?? 'Unknown'),
-                          subtitle: t.note != null && t.note!.isNotEmpty ? Text(t.note!) : null,
-                          trailing: Text(
-                            '${isExpense ? '−' : '+'}${Formatters.currency(t.amount)}',
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: isExpense ? colorScheme.error : colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                    SliverToBoxAdapter(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
                         ),
-                      );
-                    },
-                  ),
-                ],
+                        clipBehavior: Clip.antiAlias,
+                        child: Column(
+                          children: List.generate(entry.value.length, (index) {
+                            final t = entry.value[index];
+                            final cat = categoryMap[t.categoryId];
+                            final isExpense = t.type == TransactionType.expense;
+
+                            return Column(
+                              children: [
+                                ListTile(
+                                  onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                                  leading: Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: cat != null
+                                          ? Color(int.parse('FF${cat.colorHex}', radix: 16)).withValues(alpha: 0.15)
+                                          : colorScheme.surfaceContainerHighest,
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                    child: Icon(
+                                      cat != null
+                                          ? IconData(cat.iconCodePoint,
+                                              fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
+                                              fontPackage: 'phosphor_flutter')
+                                          : PhosphorIconsFill.receipt,
+                                      color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
+                                      size: 20,
+                                    ),
+                                  ),
+                                  title: Text(
+                                    cat?.name ?? 'Unknown',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                  ),
+                                  subtitle: t.note != null && t.note!.isNotEmpty
+                                      ? Text(t.note!, style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12))
+                                      : null,
+                                  trailing: Text(
+                                    '${isExpense ? '−' : '+'}${Formatters.currencyCompact(t.amount)}',
+                                    style: theme.textTheme.titleMedium?.copyWith(
+                                      color: isExpense ? colorScheme.error : colorScheme.primary,
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: -0.5,
+                                    ),
+                                  ),
+                                ),
+                                if (index < entry.value.length - 1)
+                                  Divider(
+                                    height: 1,
+                                    indent: 64,
+                                    endIndent: 20,
+                                    color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+                                  ),
+                              ],
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               );
             }),
 
@@ -342,39 +469,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  void _showBudgetDialog(BuildContext context, WidgetRef ref, double currentLimit) {
-    final controller = TextEditingController(
-        text: currentLimit > 0 ? currentLimit.toStringAsFixed(0) : '');
-
-    showDialog(
+  void _showBudgetSheet(BuildContext context, WidgetRef ref, double currentLimit) {
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Set Monthly Budget'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          autofocus: true,
-          decoration: InputDecoration(
-            prefixText: '${AppConstants.currencySymbol} ',
-            hintText: 'e.g. 50000',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              final val = double.tryParse(controller.text.trim());
-              if (val != null && val > 0) {
-                ref.read(budgetProvider.notifier).setMonthlyLimit(val);
-              }
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+      isScrollControlled: true,
+      useRootNavigator: true,
+      builder: (ctx) => _BudgetEntrySheet(
+        initialLimit: currentLimit,
+        onSave: (val) {
+          ref.read(budgetProvider.notifier).setMonthlyLimit(val);
+        },
       ),
     );
   }
@@ -396,13 +500,39 @@ class _BalanceMini extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 20, color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7)),
-        const SizedBox(width: 8),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: colorScheme.onPrimaryContainer.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(
+            icon == Icons.arrow_downward ? PhosphorIconsFill.arrowDown : PhosphorIconsFill.arrowUp,
+            size: 16,
+            color: colorScheme.onPrimaryContainer,
+          ),
+        ),
+        const SizedBox(width: 12),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 12, color: colorScheme.onPrimaryContainer.withValues(alpha: 0.8))),
-            Text(amount, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                color: colorScheme.onPrimaryContainer.withValues(alpha: 0.7),
+              ),
+            ),
+            Text(
+              amount,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: colorScheme.onPrimaryContainer,
+                letterSpacing: -0.5,
+              ),
+            ),
           ],
         ),
       ],
@@ -412,24 +542,27 @@ class _BalanceMini extends StatelessWidget {
 
 class _DaySpending {
   final DateTime day;
-  final double amount;
-  const _DaySpending({required this.day, required this.amount});
+  final Map<String, double> categoryAmounts;
+  final double total;
+  const _DaySpending({required this.day, required this.categoryAmounts, required this.total});
 }
 
 class _WeeklyChart extends StatelessWidget {
   final List<_DaySpending> data;
+  final Map<String, CategoryModel> categoryMap;
   final ColorScheme colorScheme;
   final ThemeData theme;
 
   const _WeeklyChart({
     required this.data,
+    required this.categoryMap,
     required this.colorScheme,
     required this.theme,
   });
 
   @override
   Widget build(BuildContext context) {
-    final maxAmount = data.fold(0.0, (max, d) => d.amount > max ? d.amount : max);
+    final maxAmount = data.fold(0.0, (max, d) => d.total > max ? d.total : max);
 
     return SizedBox(
       height: 150,
@@ -437,7 +570,29 @@ class _WeeklyChart extends StatelessWidget {
         BarChartData(
           alignment: BarChartAlignment.spaceAround,
           maxY: maxAmount > 0 ? maxAmount * 1.2 : 100,
-          barTouchData: BarTouchData(enabled: false),
+          barTouchData: BarTouchData(
+            enabled: true,
+            touchTooltipData: BarTouchTooltipData(
+              tooltipBgColor: colorScheme.surfaceContainerHighest,
+              tooltipRoundedRadius: 8,
+              tooltipPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              tooltipMargin: 8,
+              getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                return BarTooltipItem(
+                  '${AppConstants.currencySymbol}${rod.toY.toStringAsFixed(0)}',
+                  theme.textTheme.labelLarge!.copyWith(
+                    color: colorScheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                );
+              },
+            ),
+            touchCallback: (event, response) {
+              if (event is FlTapDownEvent && response?.spot != null) {
+                HapticFeedback.lightImpact();
+              }
+            },
+          ),
           titlesData: FlTitlesData(
             show: true,
             topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
@@ -463,20 +618,134 @@ class _WeeklyChart extends StatelessWidget {
           gridData: const FlGridData(show: false),
           borderData: FlBorderData(show: false),
           barGroups: data.asMap().entries.map((entry) {
-            final isToday = entry.key == data.length - 1;
+            final spending = entry.value;
+            final sortedCategories = spending.categoryAmounts.entries.toList()
+              ..sort((a, b) => b.value.compareTo(a.value));
+
+            double runningTotal = 0;
+            final stackItems = sortedCategories.asMap().entries.map((stackEntry) {
+              final i = stackEntry.key;
+              final catEntry = stackEntry.value;
+              final start = runningTotal;
+              runningTotal += catEntry.value;
+              return BarChartRodStackItem(
+                start,
+                runningTotal,
+                ColorUtils.getHarmonicColor(context, i, sortedCategories.length),
+              );
+            }).toList();
+
             return BarChartGroupData(
               x: entry.key,
               barRods: [
                 BarChartRodData(
-                  toY: entry.value.amount > 0 ? entry.value.amount : 0,
-                  color: isToday ? colorScheme.primary : colorScheme.primaryContainer,
+                  toY: spending.total > 0 ? spending.total : 0,
                   width: 16,
                   borderRadius: BorderRadius.circular(4),
+                  rodStackItems: stackItems,
+                  color: colorScheme.surfaceContainerHighest, // Background color for empty rod
                 ),
               ],
             );
           }).toList(),
         ),
+      ),
+    );
+  }
+}
+
+class _BudgetEntrySheet extends StatefulWidget {
+  final double initialLimit;
+  final ValueChanged<double> onSave;
+
+  const _BudgetEntrySheet({
+    required this.initialLimit,
+    required this.onSave,
+  });
+
+  @override
+  State<_BudgetEntrySheet> createState() => _BudgetEntrySheetState();
+}
+
+class _BudgetEntrySheetState extends State<_BudgetEntrySheet> {
+  late String _amountStr;
+
+  @override
+  void initState() {
+    super.initState();
+    _amountStr = widget.initialLimit > 0 ? widget.initialLimit.toStringAsFixed(0) : '';
+  }
+
+  void _onKeyPressed(String key) {
+    if (key == '.' && _amountStr.contains('.')) return;
+    if (_amountStr.length >= 9) return;
+    setState(() {
+      _amountStr += key;
+    });
+  }
+
+  void _onBackspace() {
+    if (_amountStr.isEmpty) return;
+    setState(() {
+      _amountStr = _amountStr.substring(0, _amountStr.length - 1);
+    });
+  }
+
+  void _onClear() {
+    setState(() {
+      _amountStr = '';
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Container(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 16),
+          Text(
+            'Set Monthly Budget',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 32),
+          Text(
+            'Budget Amount',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${AppConstants.currencySymbol}${_amountStr.isEmpty ? "0" : _amountStr}',
+            style: theme.textTheme.displayMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.primary,
+            ),
+          ),
+          const SizedBox(height: 32),
+          NumberPad(
+            onKeyPressed: _onKeyPressed,
+            onBackspace: _onBackspace,
+            onClear: _onClear,
+            activeColor: colorScheme.primary,
+            onDone: () {
+              final val = double.tryParse(_amountStr);
+              if (val != null && val > 0) {
+                widget.onSave(val);
+              }
+              Navigator.pop(context);
+            },
+          ),
+        ],
       ),
     );
   }

@@ -9,6 +9,7 @@ import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/icon_utils.dart';
 import '../../../core/routing/app_router.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -191,9 +192,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                       ),
                                       child: Icon(
                                         cat != null
-                                            ? IconData(cat.iconCodePoint,
-                                                fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                                fontPackage: 'phosphor_flutter')
+                                            ? IconUtils.fromCodePoint(cat.iconCodePoint)
                                             : PhosphorIconsFill.receipt,
                                         color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
                                         size: 22,

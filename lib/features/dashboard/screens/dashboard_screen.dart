@@ -14,6 +14,7 @@ import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/utils/color_utils.dart';
+import '../../../core/utils/icon_utils.dart';
 import '../../../core/routing/app_router.dart';
 import 'package:flutter/services.dart';
 import '../../transactions/screens/widgets/number_pad.dart';
@@ -358,9 +359,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     child: Icon(
                                       cat != null
-                                          ? IconData(cat.iconCodePoint,
-                                              fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                              fontPackage: 'phosphor_flutter')
+                                          ? IconUtils.fromCodePoint(cat.iconCodePoint)
                                           : PhosphorIconsFill.receipt,
                                       color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
                                       size: 20,

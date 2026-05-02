@@ -2,9 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/models/category_model.dart';
@@ -266,7 +265,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                         if (transactions.isNotEmpty)
                           TextButton(
-                            onPressed: () => context.go(AppRoutes.history),
+                            onPressed: () => appRouter.go(AppRoutes.history),
                             child: const Text('See all'),
                           ),
                       ],
@@ -347,7 +346,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             return Column(
                               children: [
                                 ListTile(
-                                  onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                  onTap: () => appRouter.push(AppRoutes.addTransaction, extra: t),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                                   leading: Container(
                                     padding: const EdgeInsets.all(10),

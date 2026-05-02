@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
@@ -180,7 +179,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                     ],
                                   ),
                                   child: ListTile(
-                                    onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                    onTap: () => appRouter.push(AppRoutes.addTransaction, extra: t),
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                     leading: Container(
                                       padding: const EdgeInsets.all(12),

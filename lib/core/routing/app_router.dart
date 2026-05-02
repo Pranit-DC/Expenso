@@ -12,6 +12,7 @@ import '../../features/insights/screens/insights_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../core/database/models/transaction_model.dart';
 import 'navigation_shell.dart';
+import 'tab_back_handler.dart';
 
 /// Route path constants.
 abstract class AppRoutes {
@@ -68,34 +69,46 @@ final GoRouter appRouter = GoRouter(
   initialLocation: AppRoutes.dashboard,
   routes: [
     // --- Shell Route for bottom nav ---
-    ShellRoute(
-      builder: (context, state, child) {
-        return NavigationShell(child: child);
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) {
+        return NavigationShell(navigationShell: navigationShell);
       },
-      routes: [
-        GoRoute(
-          path: AppRoutes.dashboard,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: DashboardScreen(),
-          ),
+      branches: [
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.dashboard,
+              builder: (context, state) =>
+                  const TabBackHandler(child: DashboardScreen()),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.history,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: HistoryScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.history,
+              builder: (context, state) =>
+                  const TabBackHandler(child: HistoryScreen()),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.insights,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: InsightsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.insights,
+              builder: (context, state) =>
+                  const TabBackHandler(child: InsightsScreen()),
+            ),
+          ],
         ),
-        GoRoute(
-          path: AppRoutes.settings,
-          pageBuilder: (context, state) => const NoTransitionPage(
-            child: SettingsScreen(),
-          ),
+        StatefulShellBranch(
+          routes: [
+            GoRoute(
+              path: AppRoutes.settings,
+              builder: (context, state) =>
+                  const TabBackHandler(child: SettingsScreen()),
+            ),
+          ],
         ),
       ],
     ),

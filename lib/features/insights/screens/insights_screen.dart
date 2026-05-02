@@ -11,6 +11,7 @@ import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/color_utils.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/icon_utils.dart';
 
 class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
@@ -290,8 +291,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                                 touchCallback: (event, response) {
                                   if (event is FlTapDownEvent || event is FlPanUpdateEvent) {
                                     if (response?.touchedSection != null) {
-                                      final newIndex = response!.touchedSection!.touchedSectionIndex;
-                                      if (newIndex != _hoveredIndex && newIndex >= 0) {
+                                      final newIndex = response?.touchedSection?.touchedSectionIndex;
+                                      if (newIndex != null && newIndex != _hoveredIndex && newIndex >= 0) {
                                         HapticFeedback.lightImpact();
                                       }
                                     }
@@ -335,8 +336,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                                           ),
                                           child: Icon(
                                             categoryMap[slice.categoryId]?.iconCodePoint != null
-                                                ? IconData(categoryMap[slice.categoryId]!.iconCodePoint,
-                                                    fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter')
+                                                ? IconUtils.fromCodePoint(categoryMap[slice.categoryId]!.iconCodePoint)
                                                 : Icons.category,
                                             size: 16,
                                             color: color,
@@ -402,7 +402,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                           leading: CircleAvatar(
                             backgroundColor: colorScheme.primary.withValues(alpha: 0.1),
                             foregroundColor: colorScheme.primary,
-                            child: Icon(cat != null ? IconData(cat.iconCodePoint, fontFamily: PhosphorIconsFill.shoppingCart.fontFamily, fontPackage: 'phosphor_flutter') : Icons.category),
+                            child: Icon(cat != null ? IconUtils.fromCodePoint(cat.iconCodePoint) : Icons.category),
                           ),
                             title: Text(name),
                             subtitle: LinearProgressIndicator(

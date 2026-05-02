@@ -2,9 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/models/category_model.dart';
@@ -14,6 +13,7 @@ import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
 import '../../../core/utils/color_utils.dart';
+import '../../../core/utils/icon_utils.dart';
 import '../../../core/routing/app_router.dart';
 import 'package:flutter/services.dart';
 import '../../transactions/screens/widgets/number_pad.dart';
@@ -265,7 +265,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                         ),
                         if (transactions.isNotEmpty)
                           TextButton(
-                            onPressed: () => context.go(AppRoutes.history),
+                            onPressed: () => appRouter.go(AppRoutes.history),
                             child: const Text('See all'),
                           ),
                       ],
@@ -346,7 +346,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                             return Column(
                               children: [
                                 ListTile(
-                                  onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                  onTap: () => appRouter.push(AppRoutes.addTransaction, extra: t),
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                                   leading: Container(
                                     padding: const EdgeInsets.all(10),
@@ -358,9 +358,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                                     ),
                                     child: Icon(
                                       cat != null
-                                          ? IconData(cat.iconCodePoint,
-                                              fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                              fontPackage: 'phosphor_flutter')
+                                          ? IconUtils.fromCodePoint(cat.iconCodePoint)
                                           : PhosphorIconsFill.receipt,
                                       color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
                                       size: 20,

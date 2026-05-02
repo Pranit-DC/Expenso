@@ -13,6 +13,7 @@ import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/database/repositories/budget_repository.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/utils/icon_utils.dart';
 import '../../../core/widgets/bottom_sheet_helper.dart';
 import 'widgets/number_pad.dart';
 
@@ -201,9 +202,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                           shape: BoxShape.circle,
                         ),
                         child: Icon(
-                          IconData(cat.iconCodePoint,
-                              fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                              fontPackage: 'phosphor_flutter'),
+                          IconUtils.fromCodePoint(cat.iconCodePoint),
                           color: isSelected
                               ? Theme.of(context).colorScheme.onPrimary
                               : Color(int.parse('FF${cat.colorHex}', radix: 16)),
@@ -417,9 +416,7 @@ class _AddTransactionScreenState extends ConsumerState<AddTransactionScreen> {
                 ),
                 child: Icon(
                   selectedCategory != null
-                      ? IconData(selectedCategory.iconCodePoint,
-                          fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                          fontPackage: 'phosphor_flutter')
+                      ? IconUtils.fromCodePoint(selectedCategory.iconCodePoint)
                       : Icons.category,
                   color: selectedCategory != null
                       ? Colors.white

@@ -2,13 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:go_router/go_router.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 
 import '../../../core/database/models/transaction_model.dart';
 import '../../../core/database/repositories/transaction_repository.dart';
 import '../../../core/database/repositories/category_repository.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/utils/icon_utils.dart';
 import '../../../core/routing/app_router.dart';
 
 class HistoryScreen extends ConsumerStatefulWidget {
@@ -179,7 +179,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                     ],
                                   ),
                                   child: ListTile(
-                                    onTap: () => context.push(AppRoutes.addTransaction, extra: t),
+                                    onTap: () => appRouter.push(AppRoutes.addTransaction, extra: t),
                                     contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                                     leading: Container(
                                       padding: const EdgeInsets.all(12),
@@ -191,9 +191,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                                       ),
                                       child: Icon(
                                         cat != null
-                                            ? IconData(cat.iconCodePoint,
-                                                fontFamily: PhosphorIconsFill.shoppingCart.fontFamily,
-                                                fontPackage: 'phosphor_flutter')
+                                            ? IconUtils.fromCodePoint(cat.iconCodePoint)
                                             : PhosphorIconsFill.receipt,
                                         color: cat != null ? Color(int.parse('FF${cat.colorHex}', radix: 16)) : colorScheme.onSurfaceVariant,
                                         size: 22,

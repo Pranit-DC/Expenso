@@ -12,6 +12,7 @@ import '../../features/insights/screens/insights_screen.dart';
 import '../../features/settings/screens/settings_screen.dart';
 import '../../core/database/models/transaction_model.dart';
 import 'navigation_shell.dart';
+import 'tab_back_handler.dart';
 
 /// Route path constants.
 abstract class AppRoutes {
@@ -77,9 +78,8 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.dashboard,
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: DashboardScreen(),
-              ),
+              builder: (context, state) =>
+                  const TabBackHandler(child: DashboardScreen()),
             ),
           ],
         ),
@@ -87,9 +87,8 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.history,
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: HistoryScreen(),
-              ),
+              builder: (context, state) =>
+                  const TabBackHandler(child: HistoryScreen()),
             ),
           ],
         ),
@@ -97,9 +96,8 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.insights,
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: InsightsScreen(),
-              ),
+              builder: (context, state) =>
+                  const TabBackHandler(child: InsightsScreen()),
             ),
           ],
         ),
@@ -107,9 +105,8 @@ final GoRouter appRouter = GoRouter(
           routes: [
             GoRoute(
               path: AppRoutes.settings,
-              pageBuilder: (context, state) => const NoTransitionPage(
-                child: SettingsScreen(),
-              ),
+              builder: (context, state) =>
+                  const TabBackHandler(child: SettingsScreen()),
             ),
           ],
         ),

@@ -1,10 +1,6 @@
-// GENERATED CODE - DO NOT MODIFY BY HAND
-
 part of 'budget_model.dart';
 
-// **************************************************************************
 // TypeAdapterGenerator
-// **************************************************************************
 
 class BudgetModelAdapter extends TypeAdapter<BudgetModel> {
   @override
